@@ -18,13 +18,30 @@
   form { display:flex; gap:10px; padding:16px 20px; max-width:800px; width:100%; margin:0 auto; }
   textarea { flex:1; resize:none; background:var(--panel); color:var(--text); border:1px solid #2a2b4a; border-radius:12px; padding:12px; font:inherit; }
   button { background:var(--accent); color:#fff; border:0; border-radius:12px; padding:0 22px; font:inherit; font-weight:600; cursor:pointer; }
+  #auth { display:none; margin:auto; background:var(--panel); padding:28px; border-radius:16px; width:min(360px,90vw); flex-direction:column; gap:12px; }
+  #auth h2 { margin:0 0 4px; }
+  #auth input { background:var(--bg); color:var(--text); border:1px solid #2a2b4a; border-radius:10px; padding:11px; font:inherit; }
+  #auth button { padding:11px; }
+  #err { color:#ff8a8a; min-height:1.4em; font-size:14px; }
+  .link { background:none; color:var(--accent); padding:0; text-align:center; }
+  #who { margin-left:auto; font-size:14px; color:var(--muted); display:none; align-items:center; gap:10px; }
+  #who button { padding:4px 12px; font-size:14px; }
   button:disabled { opacity:.5; cursor:default; }
 </style>
 </head>
 <body>
-<header><span>✦</span> Lumora-KI</header>
-<div id="chat"><div class="hint">Hallo! Ich bin Lumora. Frag mich alles.</div></div>
-<form id="form">
+<header style="display:flex;align-items:center"><span>✦</span>&nbsp;Lumora-KI
+  <div id="who"><span id="uname"></span><button id="logout" type="button">Abmelden</button></div></header>
+<form id="auth" autocomplete="on">
+  <h2 id="atitle">Anmelden</h2>
+  <input id="user" placeholder="Benutzername" autocomplete="username" required>
+  <input id="pass" type="password" placeholder="Passwort (min. 8 Zeichen)" autocomplete="current-password" required>
+  <div id="err"></div>
+  <button id="abtn">Anmelden</button>
+  <button id="toggle" type="button" class="link">Noch kein Konto? Registrieren</button>
+</form>
+<div id="chat" style="display:none"><div class="hint">Hallo! Ich bin Lumora. Frag mich alles.</div></div>
+<form id="form" style="display:none">
   <textarea id="input" rows="2" placeholder="Schreib eine Nachricht…" autofocus></textarea>
   <button id="send">Senden</button>
 </form>
@@ -33,6 +50,47 @@ const chat = document.getElementById('chat');
 const input = document.getElementById('input');
 const send = document.getElementById('send');
 const history = [];
+const $ = id => document.getElementById(id);
+let registering = false;
+
+function showApp(name) {
+  $('auth').style.display = 'none';
+  chat.style.display = 'flex'; $('form').style.display = 'flex';
+  $('who').style.display = 'flex'; $('uname').textContent = name;
+  input.focus();
+}
+function showAuth() {
+  chat.style.display = 'none'; $('form').style.display = 'none';
+  $('who').style.display = 'none'; $('auth').style.display = 'flex';
+}
+function setMode(reg) {
+  registering = reg;
+  $('atitle').textContent = reg ? 'Konto erstellen' : 'Anmelden';
+  $('abtn').textContent = reg ? 'Registrieren' : 'Anmelden';
+  $('toggle').textContent = reg ? 'Schon ein Konto? Anmelden' : 'Noch kein Konto? Registrieren';
+  $('pass').autocomplete = reg ? 'new-password' : 'current-password';
+  $('err').textContent = '';
+}
+$('toggle').onclick = () => setMode(!registering);
+$('auth').addEventListener('submit', async e => {
+  e.preventDefault();
+  const res = await fetch(registering ? '/api/register' : '/api/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: $('user').value, password: $('pass').value }),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) { $('err').textContent = typeof j.detail === 'string' ? j.detail : 'Ungültige Eingabe'; return; }
+  $('pass').value = '';
+  showApp(j.username);
+});
+$('logout').onclick = async () => {
+  await fetch('/api/logout', { method: 'POST' });
+  history.length = 0; location.reload();
+};
+(async () => {
+  const r = await fetch('/api/me');
+  if (r.ok) showApp((await r.json()).username); else showAuth();
+})();
 
 function add(role, text) {
   const d = document.createElement('div');
@@ -59,6 +117,7 @@ async function submit() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: history }),
     });
+    if (res.status === 401) { showAuth(); bot.remove(); history.pop(); send.disabled = false; return; }
     const reader = res.body.getReader();
     const dec = new TextDecoder();
     let buf = '';
