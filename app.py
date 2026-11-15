@@ -32,35 +32,77 @@ SESSION_SECONDS = 30 * 24 * 3600
 COOKIE = "lumora_session"
 
 
+DATABASE_URL = os.getenv("DATABASE_URL")  # gesetzt -> Postgres, sonst SQLite-Datei
+PG = bool(DATABASE_URL)
+if PG:
+    import psycopg
+    from psycopg.rows import dict_row
+
+    UNIQUE_ERRORS = (psycopg.errors.UniqueViolation,)
+else:
+    UNIQUE_ERRORS = (sqlite3.IntegrityError,)
+
+
+class Conn:
+    """Kleine Hülle, damit derselbe Code mit SQLite und Postgres läuft."""
+
+    def __init__(self):
+        if PG:
+            self.c = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+        else:
+            self.c = sqlite3.connect(DB_PATH)
+            self.c.row_factory = sqlite3.Row
+            self.c.execute("PRAGMA foreign_keys = ON")
+
+    def execute(self, sql, params=()):
+        return self.c.execute(sql.replace("?", "%s") if PG else sql, params)
+
+    def insert(self, sql, params):
+        """INSERT ausführen und die neue id zurückgeben."""
+        if PG:
+            return self.c.execute(sql.replace("?", "%s") + " RETURNING id", params).fetchone()["id"]
+        return self.c.execute(sql, params).lastrowid
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, et, ev, tb):
+        try:
+            self.c.rollback() if et else self.c.commit()
+        finally:
+            self.c.close()
+
+
 def db():
-    con = sqlite3.connect(DB_PATH)
-    con.row_factory = sqlite3.Row
-    con.execute("PRAGMA foreign_keys = ON")
-    return con
+    return Conn()
+
+
+SCHEMA = [
+    "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, username TEXT NOT NULL, "
+    "salt BLOB NOT NULL, pw_hash BLOB NOT NULL, created REAL NOT NULL)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_name ON users(lower(username))",
+    "CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, "
+    "title TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, chat_id INTEGER NOT NULL "
+    "REFERENCES chats(id) ON DELETE CASCADE, role TEXT NOT NULL, content TEXT NOT NULL, "
+    "created REAL NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS idx_chats_user ON chats(user_id, updated)",
+    "CREATE INDEX IF NOT EXISTS idx_msgs_chat ON messages(chat_id, id)",
+    "CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, "
+    "user_id INTEGER NOT NULL, expires REAL NOT NULL)",
+]
 
 
 def init_db():
     with db() as con:
-        con.execute(
-            "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, "
-            "username TEXT UNIQUE NOT NULL COLLATE NOCASE, salt BLOB NOT NULL, "
-            "pw_hash BLOB NOT NULL, created REAL NOT NULL)"
-        )
-        con.execute(
-            "CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, "
-            "title TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL)"
-        )
-        con.execute(
-            "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, chat_id INTEGER NOT NULL "
-            "REFERENCES chats(id) ON DELETE CASCADE, role TEXT NOT NULL, content TEXT NOT NULL, "
-            "created REAL NOT NULL)"
-        )
-        con.execute("CREATE INDEX IF NOT EXISTS idx_chats_user ON chats(user_id, updated)")
-        con.execute("CREATE INDEX IF NOT EXISTS idx_msgs_chat ON messages(chat_id, id)")
-        con.execute(
-            "CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, "
-            "user_id INTEGER NOT NULL, expires REAL NOT NULL)"
-        )
+        for stmt in SCHEMA:
+            if PG:
+                stmt = (
+                    stmt.replace("INTEGER PRIMARY KEY", "SERIAL PRIMARY KEY")
+                    .replace("BLOB", "BYTEA")
+                    .replace("REAL", "DOUBLE PRECISION")
+                )
+            con.execute(stmt)
 
 
 def hash_pw(password: str, salt: bytes) -> bytes:
@@ -100,7 +142,8 @@ def start_session(response: Response, user_id: int):
     )
 
 
-os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
+if not PG:
+    os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
 init_db()
 client = AsyncAnthropic()  # liest ANTHROPIC_API_KEY aus der Umgebung
 app = FastAPI(title="Lumora-KI")
@@ -128,12 +171,11 @@ async def register(creds: Credentials, response: Response):
     salt = secrets.token_bytes(16)
     try:
         with db() as con:
-            cur = con.execute(
+            user_id = con.insert(
                 "INSERT INTO users (username, salt, pw_hash, created) VALUES (?, ?, ?, ?)",
                 (creds.username, salt, hash_pw(creds.password, salt), time.time()),
             )
-            user_id = cur.lastrowid
-    except sqlite3.IntegrityError:
+    except UNIQUE_ERRORS:
         raise HTTPException(409, "Dieser Benutzername ist schon vergeben")
     start_session(response, user_id)
     return {"username": creds.username}
@@ -143,7 +185,7 @@ async def register(creds: Credentials, response: Response):
 async def login(creds: Credentials, response: Response):
     with db() as con:
         row = con.execute(
-            "SELECT id, username, salt, pw_hash FROM users WHERE username = ?",
+            "SELECT id, username, salt, pw_hash FROM users WHERE lower(username) = lower(?)",
             (creds.username,),
         ).fetchone()
     salt = row["salt"] if row else DUMMY_SALT
@@ -192,11 +234,11 @@ async def list_chats(user=Depends(current_user)):
 async def create_chat(user=Depends(current_user)):
     now = time.time()
     with db() as con:
-        cur = con.execute(
+        new_id = con.insert(
             "INSERT INTO chats (user_id, title, created, updated) VALUES (?, ?, ?, ?)",
             (user["id"], "Neuer Chat", now, now),
         )
-    return {"id": cur.lastrowid, "title": "Neuer Chat"}
+    return {"id": new_id, "title": "Neuer Chat"}
 
 
 @app.get("/api/chats/{chat_id}")

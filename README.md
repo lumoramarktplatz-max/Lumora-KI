@@ -15,8 +15,12 @@ Dann http://localhost:8000 öffnen.
 
 Persönlichkeit anpassen: `SYSTEM_PROMPT` in `app.py`. Modell ändern: `LUMORA_MODEL` in `.env`.
 
-## Deployment auf Render
+## Deployment auf Render (kostenlos)
 
-1. Repository auf GitHub pushen, dann in Render: **New → Blueprint** und dieses Repo wählen (`render.yaml` wird erkannt).
-2. Beim Anlegen `ANTHROPIC_API_KEY` eintragen.
-3. Konten und Chats liegen in SQLite auf einer persistenten Disk (`/var/data`). Disks gibt es bei Render nur in bezahlten Plänen (hier `starter`); ohne Disk gingen die Daten bei jedem Deploy verloren.
+Der Webdienst läuft auf Renders Gratis-Plan, die Daten (Konten & Chats) liegen in einer kostenlosen Postgres-Datenbank bei Neon, weil der Gratis-Plan von Render keinen dauerhaften Speicher hat.
+
+1. Auf neon.tech ein kostenloses Konto und ein Projekt anlegen, die **Connection string** (`postgresql://…`) kopieren.
+2. Auf Render: **New → Blueprint**, dieses Repo (und den passenden Branch) wählen.
+3. `ANTHROPIC_API_KEY` und `DATABASE_URL` eintragen, **Apply** klicken.
+
+Hinweise: Der Gratis-Dienst schläft nach ca. 15 Minuten ohne Besucher ein; die erste Anfrage danach dauert ca. 30–60 Sekunden. Ohne `DATABASE_URL` nutzt die App lokal eine SQLite-Datei (`LUMORA_DB`).
