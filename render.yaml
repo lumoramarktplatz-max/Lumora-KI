@@ -9,11 +9,13 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.3
+      - key: GEMINI_API_KEY
+        sync: false          # kostenloser Key von aistudio.google.com
       - key: ANTHROPIC_API_KEY
-        sync: false          # im Render-Dashboard eintragen
+        sync: false          # optional: nur nötig, wenn LUMORA_PROVIDER=claude
       - key: DATABASE_URL
         sync: false          # Postgres-Adresse von Neon (kostenlos), im Dashboard eintragen
-      - key: LUMORA_MODEL
-        value: claude-sonnet-5-5
+      - key: LUMORA_PROVIDER
+        value: gemini        # "gemini" (gratis) oder "claude"
       - key: LUMORA_SECURE_COOKIE
         value: "1"

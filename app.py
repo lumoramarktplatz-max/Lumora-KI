@@ -8,6 +8,7 @@ import secrets
 import sqlite3
 import time
 
+import httpx
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
@@ -17,7 +18,13 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-MODEL = os.getenv("LUMORA_MODEL", "claude-sonnet-5-5")
+# Anbieter: "gemini" (hat eine kostenlose Stufe) oder "claude".
+# Ohne LUMORA_PROVIDER wird Gemini genommen, falls GEMINI_API_KEY gesetzt ist, sonst Claude.
+GEMINI_KEY = os.getenv("GEMINI_API_KEY")
+PROVIDER = os.getenv("LUMORA_PROVIDER") or ("gemini" if GEMINI_KEY else "claude")
+MODEL = os.getenv("LUMORA_MODEL") or (
+    "gemini-2.5-flash" if PROVIDER == "gemini" else "claude-sonnet-5-5"
+)
 SYSTEM_PROMPT = (
     "Du bist Lumora, eine freundliche und hilfreiche KI. "
     "Du beantwortest Fragen zu allen Themen klar, ehrlich und verständlich. "
@@ -145,7 +152,52 @@ def start_session(response: Response, user_id: int):
 if not PG:
     os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
 init_db()
-client = AsyncAnthropic()  # liest ANTHROPIC_API_KEY aus der Umgebung
+client = None  # Claude-Client, wird erst bei Bedarf erstellt (liest ANTHROPIC_API_KEY)
+
+
+async def generate_claude(history):
+    global client
+    if client is None:
+        client = AsyncAnthropic()
+    async with client.messages.stream(
+        model=MODEL, max_tokens=4096, system=SYSTEM_PROMPT, messages=history
+    ) as s:
+        async for chunk in s.text_stream:
+            yield chunk
+
+
+async def generate_gemini(history):
+    if not GEMINI_KEY:
+        raise RuntimeError("GEMINI_API_KEY ist nicht gesetzt")
+    body = {
+        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": [
+            {"role": "user" if m["role"] == "user" else "model", "parts": [{"text": m["content"]}]}
+            for m in history
+        ],
+    }
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:streamGenerateContent?alt=sse"
+    async with httpx.AsyncClient(timeout=httpx.Timeout(120.0), transport=GEMINI_TRANSPORT) as http:
+        async with http.stream("POST", url, json=body, headers={"x-goog-api-key": GEMINI_KEY}) as r:
+            if r.status_code != 200:
+                detail = (await r.aread()).decode(errors="replace")
+                try:
+                    detail = json.loads(detail)["error"]["message"]
+                except Exception:
+                    pass
+                raise RuntimeError(f"Gemini-Fehler {r.status_code}: {detail[:300]}")
+            async for line in r.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = json.loads(line[5:].strip() or "{}")
+                for cand in data.get("candidates", []):
+                    for part in cand.get("content", {}).get("parts", []):
+                        if part.get("text"):
+                            yield part["text"]
+
+
+GEMINI_TRANSPORT = None  # nur für Tests austauschbar
+generate = generate_gemini if PROVIDER == "gemini" else generate_claude
 app = FastAPI(title="Lumora-KI")
 
 
@@ -288,12 +340,9 @@ async def send_message(chat_id: int, req: SendRequest, user=Depends(current_user
     async def stream():
         answer = ""
         try:
-            async with client.messages.stream(
-                model=MODEL, max_tokens=4096, system=SYSTEM_PROMPT, messages=history
-            ) as s:
-                async for chunk in s.text_stream:
-                    answer += chunk
-                    yield f"data: {json.dumps({'text': chunk})}\n\n"
+            async for chunk in generate(history):
+                answer += chunk
+                yield f"data: {json.dumps({'text': chunk})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
         finally:
