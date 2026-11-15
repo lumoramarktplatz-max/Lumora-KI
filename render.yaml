@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: lumora-ki
+    runtime: python
+    plan: starter            # Persistente Disk (für Konten & Chats) braucht einen bezahlten Plan
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: ANTHROPIC_API_KEY
+        sync: false          # wird im Render-Dashboard eingetragen
+      - key: LUMORA_MODEL
+        value: claude-sonnet-5-5
+      - key: LUMORA_DB
+        value: /var/data/lumora.db
+      - key: LUMORA_SECURE_COOKIE
+        value: "1"
+    disk:
+      name: lumora-data
+      mountPath: /var/data
+      sizeGB: 1

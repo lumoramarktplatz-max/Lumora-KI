@@ -10,7 +10,21 @@
   body { margin:0; height:100vh; display:flex; flex-direction:column; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,sans-serif; }
   header { padding:14px 20px; font-weight:700; font-size:20px; border-bottom:1px solid #2a2b4a; }
   header span { color:var(--accent); }
-  #chat { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:12px; max-width:800px; width:100%; margin:0 auto; }
+  #main { flex:1; display:none; min-height:0; }
+  #side { width:260px; background:var(--panel); display:flex; flex-direction:column; padding:12px; gap:8px; overflow-y:auto; }
+  #side button.new { padding:10px; }
+  .ci { display:flex; align-items:center; gap:6px; padding:8px 10px; border-radius:10px; cursor:pointer; color:var(--muted); }
+  .ci:hover, .ci.on { background:var(--bg); color:var(--text); }
+  .ci span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ci .del { background:none; color:var(--muted); padding:0 4px; }
+  #col { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #menu { display:none; background:none; color:var(--text); font-size:22px; padding:0 12px 0 0; }
+  @media (max-width:700px) {
+    #side { position:fixed; top:55px; bottom:0; left:0; z-index:5; transform:translateX(-100%); transition:transform .2s; }
+    #side.open { transform:none; }
+    #menu { display:block; }
+  }
+  #chat { flex:1; min-height:0; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:12px; max-width:800px; width:100%; margin:0 auto; }
   .msg { padding:12px 16px; border-radius:14px; max-width:85%; white-space:pre-wrap; word-wrap:break-word; }
   .user { align-self:flex-end; background:var(--accent); color:#fff; }
   .bot { align-self:flex-start; background:var(--panel); }
@@ -30,7 +44,7 @@
 </style>
 </head>
 <body>
-<header style="display:flex;align-items:center"><span>✦</span>&nbsp;Lumora-KI
+<header style="display:flex;align-items:center"><button id="menu" type="button">☰</button><span>✦</span>&nbsp;Lumora-KI
   <div id="who"><span id="uname"></span><button id="logout" type="button">Abmelden</button></div></header>
 <form id="auth" autocomplete="on">
   <h2 id="atitle">Anmelden</h2>
@@ -40,29 +54,80 @@
   <button id="abtn">Anmelden</button>
   <button id="toggle" type="button" class="link">Noch kein Konto? Registrieren</button>
 </form>
-<div id="chat" style="display:none"><div class="hint">Hallo! Ich bin Lumora. Frag mich alles.</div></div>
-<form id="form" style="display:none">
+<div id="main">
+<div id="side"><button class="new" id="newchat" type="button">+ Neuer Chat</button><div id="list"></div></div>
+<div id="col">
+<div id="chat"><div class="hint">Hallo! Ich bin Lumora. Frag mich alles.</div></div>
+<form id="form">
   <textarea id="input" rows="2" placeholder="Schreib eine Nachricht…" autofocus></textarea>
   <button id="send">Senden</button>
 </form>
+</div></div>
 <script>
 const chat = document.getElementById('chat');
 const input = document.getElementById('input');
 const send = document.getElementById('send');
-const history = [];
 const $ = id => document.getElementById(id);
 let registering = false;
 
+let currentId = null;
+const list = $('list');
+
 function showApp(name) {
   $('auth').style.display = 'none';
-  chat.style.display = 'flex'; $('form').style.display = 'flex';
+  $('main').style.display = 'flex';
   $('who').style.display = 'flex'; $('uname').textContent = name;
-  input.focus();
+  loadChats(true);
 }
 function showAuth() {
-  chat.style.display = 'none'; $('form').style.display = 'none';
+  $('main').style.display = 'none';
   $('who').style.display = 'none'; $('auth').style.display = 'flex';
 }
+async function api(url, opts) {
+  const r = await fetch(url, opts);
+  if (r.status === 401) { showAuth(); throw new Error('auth'); }
+  return r;
+}
+function hint() {
+  chat.innerHTML = '<div class="hint">Hallo! Ich bin Lumora. Frag mich alles.</div>';
+}
+async function loadChats(openFirst) {
+  const chats = await (await api('/api/chats')).json();
+  list.innerHTML = '';
+  for (const c of chats) {
+    const d = document.createElement('div');
+    d.className = 'ci' + (c.id === currentId ? ' on' : '');
+    const t = document.createElement('span'); t.textContent = c.title;
+    const x = document.createElement('button'); x.className = 'del'; x.textContent = '✕'; x.title = 'Löschen';
+    x.onclick = async e => {
+      e.stopPropagation();
+      if (!confirm('Diesen Chat löschen?')) return;
+      await api('/api/chats/' + c.id, { method: 'DELETE' });
+      if (c.id === currentId) { currentId = null; hint(); }
+      loadChats();
+    };
+    d.onclick = () => openChat(c.id);
+    d.append(t, x);
+    list.appendChild(d);
+  }
+  if (openFirst) { if (chats.length) openChat(chats[0].id); else hint(); }
+}
+async function openChat(id) {
+  currentId = id;
+  $('side').classList.remove('open');
+  const c = await (await api('/api/chats/' + id)).json();
+  chat.innerHTML = '';
+  if (!c.messages.length) hint();
+  for (const m of c.messages) add(m.role === 'user' ? 'user' : 'bot', m.content);
+  loadChats();
+}
+$('newchat').onclick = async () => {
+  const c = await (await api('/api/chats', { method: 'POST' })).json();
+  currentId = c.id; hint(); loadChats(); input.focus();
+  $('side').classList.remove('open');
+};
+$('menu').onclick = () => $('side').classList.toggle('open');
+
 function setMode(reg) {
   registering = reg;
   $('atitle').textContent = reg ? 'Konto erstellen' : 'Anmelden';
@@ -85,7 +150,7 @@ $('auth').addEventListener('submit', async e => {
 });
 $('logout').onclick = async () => {
   await fetch('/api/logout', { method: 'POST' });
-  history.length = 0; location.reload();
+  location.reload();
 };
 (async () => {
   const r = await fetch('/api/me');
@@ -103,45 +168,51 @@ function add(role, text) {
 
 async function submit() {
   const text = input.value.trim();
-  if (!text) return;
-  chat.querySelector('.hint')?.remove();
-  input.value = '';
+  if (!text || send.disabled) return;
   send.disabled = true;
-  history.push({ role: 'user', content: text });
-  add('user', text);
-  const bot = add('bot', '…');
-  let answer = '';
   try {
-    const res = await fetch('/api/chat', {
+    if (currentId === null) {
+      const c = await (await api('/api/chats', { method: 'POST' })).json();
+      currentId = c.id;
+    }
+    chat.querySelector('.hint')?.remove();
+    input.value = '';
+    add('user', text);
+    const bot = add('bot', '…');
+    let answer = '';
+    const res = await api('/api/chats/' + currentId + '/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: history }),
+      body: JSON.stringify({ content: text }),
     });
-    if (res.status === 401) { showAuth(); bot.remove(); history.pop(); send.disabled = false; return; }
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      const parts = buf.split('\n\n');
-      buf = parts.pop();
-      for (const p of parts) {
-        const data = p.replace(/^data: /, '');
-        if (data === '[DONE]') continue;
-        const j = JSON.parse(data);
-        if (j.error) { answer += '\n⚠️ ' + j.error; }
-        else answer += j.text;
-        bot.textContent = answer;
-        chat.scrollTop = chat.scrollHeight;
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      bot.textContent = '⚠️ ' + (j.detail || 'Fehler');
+    } else {
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const parts = buf.split('\n\n');
+        buf = parts.pop();
+        for (const p of parts) {
+          const data = p.replace(/^data: /, '');
+          if (data === '[DONE]') continue;
+          const j = JSON.parse(data);
+          answer += j.error ? '\n⚠️ ' + j.error : j.text;
+          bot.textContent = answer;
+          chat.scrollTop = chat.scrollHeight;
+        }
       }
     }
   } catch (e) {
-    bot.textContent = '⚠️ Verbindungsfehler: ' + e.message;
+    if (e.message !== 'auth') add('bot', '⚠️ Verbindungsfehler: ' + e.message);
   }
-  history.push({ role: 'assistant', content: answer || '(keine Antwort)' });
   send.disabled = false;
+  loadChats();
   input.focus();
 }
 

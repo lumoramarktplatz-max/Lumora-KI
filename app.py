@@ -35,6 +35,7 @@ COOKIE = "lumora_session"
 def db():
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
+    con.execute("PRAGMA foreign_keys = ON")
     return con
 
 
@@ -45,6 +46,17 @@ def init_db():
             "username TEXT UNIQUE NOT NULL COLLATE NOCASE, salt BLOB NOT NULL, "
             "pw_hash BLOB NOT NULL, created REAL NOT NULL)"
         )
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS chats (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, "
+            "title TEXT NOT NULL, created REAL NOT NULL, updated REAL NOT NULL)"
+        )
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, chat_id INTEGER NOT NULL "
+            "REFERENCES chats(id) ON DELETE CASCADE, role TEXT NOT NULL, content TEXT NOT NULL, "
+            "created REAL NOT NULL)"
+        )
+        con.execute("CREATE INDEX IF NOT EXISTS idx_chats_user ON chats(user_id, updated)")
+        con.execute("CREATE INDEX IF NOT EXISTS idx_msgs_chat ON messages(chat_id, id)")
         con.execute(
             "CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, "
             "user_id INTEGER NOT NULL, expires REAL NOT NULL)"
@@ -88,18 +100,14 @@ def start_session(response: Response, user_id: int):
     )
 
 
+os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
 init_db()
 client = AsyncAnthropic()  # liest ANTHROPIC_API_KEY aus der Umgebung
 app = FastAPI(title="Lumora-KI")
 
 
-class Message(BaseModel):
-    role: str  # "user" oder "assistant"
+class SendRequest(BaseModel):
     content: str
-
-
-class ChatRequest(BaseModel):
-    messages: list[Message]
 
 
 class Credentials(BaseModel):
@@ -161,23 +169,108 @@ async def me(user=Depends(current_user)):
     return {"username": user["username"]}
 
 
-@app.post("/api/chat")
-async def chat(req: ChatRequest, user=Depends(current_user)):
+def owned_chat(con, chat_id: int, user_id: int):
+    row = con.execute(
+        "SELECT id, title FROM chats WHERE id = ? AND user_id = ?", (chat_id, user_id)
+    ).fetchone()
+    if not row:
+        raise HTTPException(404, "Chat nicht gefunden")
+    return row
+
+
+@app.get("/api/chats")
+async def list_chats(user=Depends(current_user)):
+    with db() as con:
+        rows = con.execute(
+            "SELECT id, title FROM chats WHERE user_id = ? ORDER BY updated DESC, id DESC",
+            (user["id"],),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/chats")
+async def create_chat(user=Depends(current_user)):
+    now = time.time()
+    with db() as con:
+        cur = con.execute(
+            "INSERT INTO chats (user_id, title, created, updated) VALUES (?, ?, ?, ?)",
+            (user["id"], "Neuer Chat", now, now),
+        )
+    return {"id": cur.lastrowid, "title": "Neuer Chat"}
+
+
+@app.get("/api/chats/{chat_id}")
+async def get_chat(chat_id: int, user=Depends(current_user)):
+    with db() as con:
+        chat = owned_chat(con, chat_id, user["id"])
+        msgs = con.execute(
+            "SELECT role, content FROM messages WHERE chat_id = ? ORDER BY id", (chat_id,)
+        ).fetchall()
+    return {"id": chat["id"], "title": chat["title"], "messages": [dict(m) for m in msgs]}
+
+
+@app.delete("/api/chats/{chat_id}")
+async def delete_chat(chat_id: int, user=Depends(current_user)):
+    with db() as con:
+        owned_chat(con, chat_id, user["id"])
+        con.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
+    return {"ok": True}
+
+
+@app.post("/api/chats/{chat_id}/messages")
+async def send_message(chat_id: int, req: SendRequest, user=Depends(current_user)):
+    text = req.content.strip()
+    if not text:
+        raise HTTPException(400, "Leere Nachricht")
+    if len(text) > 20000:
+        raise HTTPException(400, "Nachricht ist zu lang")
+    with db() as con:
+        chat = owned_chat(con, chat_id, user["id"])
+        now = time.time()
+        con.execute(
+            "INSERT INTO messages (chat_id, role, content, created) VALUES (?, 'user', ?, ?)",
+            (chat_id, text, now),
+        )
+        if chat["title"] == "Neuer Chat":
+            title = " ".join(text.split())[:40] or "Neuer Chat"
+            con.execute("UPDATE chats SET title = ? WHERE id = ?", (title, chat_id))
+        con.execute("UPDATE chats SET updated = ? WHERE id = ?", (now, chat_id))
+        rows = con.execute(
+            "SELECT role, content FROM messages WHERE chat_id = ? ORDER BY id DESC LIMIT 60",
+            (chat_id,),
+        ).fetchall()
+    history = [dict(r) for r in reversed(rows)]
+    while history and history[0]["role"] != "user":
+        history.pop(0)
+
     async def stream():
+        answer = ""
         try:
             async with client.messages.stream(
-                model=MODEL,
-                max_tokens=4096,
-                system=SYSTEM_PROMPT,
-                messages=[m.model_dump() for m in req.messages],
+                model=MODEL, max_tokens=4096, system=SYSTEM_PROMPT, messages=history
             ) as s:
-                async for text in s.text_stream:
-                    yield f"data: {json.dumps({'text': text})}\n\n"
-        except Exception as e:  # Fehler an die UI weiterreichen
+                async for chunk in s.text_stream:
+                    answer += chunk
+                    yield f"data: {json.dumps({'text': chunk})}\n\n"
+        except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        finally:
+            if answer:
+                with db() as con:
+                    con.execute(
+                        "INSERT INTO messages (chat_id, role, content, created) "
+                        "VALUES (?, 'assistant', ?, ?)",
+                        (chat_id, answer, time.time()),
+                    )
+                    con.execute("UPDATE chats SET updated = ? WHERE id = ?", (time.time(), chat_id))
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+@app.get("/api/health")
+async def health():
+    return {"ok": True}
 
 
 @app.get("/")
