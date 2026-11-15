@@ -23,7 +23,7 @@ load_dotenv()
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 PROVIDER = os.getenv("LUMORA_PROVIDER") or ("gemini" if GEMINI_KEY else "claude")
 MODEL = os.getenv("LUMORA_MODEL") or (
-    "gemini-2.5-flash" if PROVIDER == "gemini" else "claude-sonnet-5-5"
+    "gemini-4-hydrogen" if PROVIDER == "gemini" else "claude-sonnet-5-5"
 )
 SYSTEM_PROMPT = (
     "Du bist Lumora, eine freundliche und hilfreiche KI. "
