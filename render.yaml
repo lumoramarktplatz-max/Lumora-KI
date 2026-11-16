@@ -12,12 +12,22 @@ services:
       - key: GEMINI_API_KEY
         sync: false          # kostenloser Key von aistudio.google.com
       - key: ANTHROPIC_API_KEY
-        sync: false          # optional: nur nötig, wenn LUMORA_PROVIDER=claude
+        sync: false          # Claude-Key für Pro-Nutzer (console.anthropic.com)
       - key: DATABASE_URL
         sync: false          # Postgres-Adresse von Neon (kostenlos), im Dashboard eintragen
-      - key: LUMORA_MODEL
-        value: gemini-4-hydrogen   # Modellname aus Google AI Studio
-      - key: LUMORA_PROVIDER
-        value: gemini        # "gemini" (gratis) oder "claude"
+      - key: LUMORA_FREE_MODEL
+        value: gemini-4-hydrogen   # Gratis-Plan: Gemini (Modellname aus Google AI Studio)
+      - key: LUMORA_PRO_MODEL
+        value: claude-sonnet-5-5   # Pro-Plan: Claude
+      - key: PAYMENTS_MODE
+        value: "off"         # off = keine Bezahlung | test = simuliert | stripe = echt
+      - key: ADMIN_PASSWORD
+        sync: false          # optional: Start-Passwort für den Admin "Matic" (sonst VIP)
+      - key: STRIPE_SECRET_KEY
+        sync: false          # nur bei PAYMENTS_MODE=stripe
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false          # nur bei PAYMENTS_MODE=stripe
+      - key: PUBLIC_URL
+        sync: false          # z. B. https://lumora-ki.onrender.com (für Stripe-Rücksprung)
       - key: LUMORA_SECURE_COOKIE
         value: "1"

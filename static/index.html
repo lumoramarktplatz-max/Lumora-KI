@@ -199,6 +199,46 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
     .msg { max-width:calc(100% - 46px); }
   }
   @media (prefers-reduced-motion: reduce) { .aurora i, .orb { animation:none; } }
+
+  /* ---------- Plan, Status, Fenster ---------- */
+  .plan { border:1px solid var(--line); background:var(--glass); color:var(--text); border-radius:999px; padding:5px 14px; font:inherit; font-size:13px; font-weight:700; cursor:pointer; transition:.2s; }
+  .plan:hover { background:var(--glass2); }
+  .plan.pro { background:var(--grad); color:#fff; border-color:transparent; box-shadow:0 4px 16px var(--pshadow); }
+  #status { display:flex; align-items:center; gap:10px; flex-wrap:wrap; width:100%; max-width:820px; margin:0 auto; padding:0 24px; font-size:12px; color:var(--muted); min-height:18px; }
+  #status .bar { width:120px; height:6px; border-radius:6px; background:var(--glass2); overflow:hidden; }
+  #status .fill { height:100%; background:var(--grad); border-radius:6px; transition:width .4s; }
+  #status .fill.warn { background:linear-gradient(90deg,#f59e0b,#ef4444); }
+  #status button { background:none; border:0; color:var(--link); font:inherit; font-size:12px; font-weight:700; cursor:pointer; padding:0; }
+  #status button:hover { text-decoration:underline; }
+  .modal { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.55); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+  .modal.open { display:flex; }
+  .sheet { position:relative; width:min(600px,100%); max-height:92dvh; overflow:auto; background:var(--sidem); color:var(--text); border:1px solid var(--line); border-radius:24px; padding:26px 24px; box-shadow:0 30px 80px var(--shadow); animation:pop .3s both; }
+  .sheet .x { position:absolute; top:14px; right:14px; width:34px; height:34px; border-radius:50%; border:1px solid var(--line); background:var(--glass); color:var(--text); cursor:pointer; }
+  .sheet h2 { margin:0 0 4px; font-size:24px; letter-spacing:-.02em; padding-right:40px; }
+  .sheet h3 { margin:22px 0 8px; font-size:15px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+  .sheet p { margin:6px 0; } .sheet .muted, .muted { color:var(--muted); font-size:14px; }
+  .card { background:var(--glass); border:1px solid var(--line); border-radius:16px; padding:14px 16px; margin:12px 0; }
+  .card.warn { border-color:#f59e0b; background:rgba(245,158,11,.12); }
+  .card.promo { border-color:transparent; background:var(--grad); color:#fff; font-weight:600; }
+  .plans { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:12px 0; }
+  .plans .card { margin:0; } .plans .card.pro { border-color:var(--a); box-shadow:0 0 0 1px var(--a); }
+  .plans h4 { margin:0 0 6px; } .plans ul { margin:0; padding-left:18px; font-size:14px; }
+  .sheet input { background:var(--inp); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font:inherit; outline:none; min-width:0; }
+  .sheet input:focus { border-color:var(--a); box-shadow:0 0 0 3px var(--ring); }
+  .row2 { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
+  .row2 input { flex:1; min-width:110px; }
+  .sheet .primary { padding:10px 18px; }
+  .btn { background:var(--glass2); border:1px solid var(--line); color:var(--text); border-radius:10px; padding:8px 14px; font:inherit; font-size:14px; cursor:pointer; }
+  .btn:hover { border-color:var(--a); } .btn.danger { color:var(--errc); } .btn:disabled, .primary:disabled { opacity:.5; cursor:not-allowed; }
+  .pw { display:flex; flex-direction:column; gap:8px; }
+  table.users { width:100%; border-collapse:collapse; font-size:13px; }
+  table.users td, table.users th { padding:7px 6px; border-bottom:1px solid var(--line); text-align:left; vertical-align:middle; }
+  table.users th { color:var(--muted); font-weight:600; }
+  .tag { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11px; font-weight:700; background:var(--glass2); }
+  .tag.pro { background:var(--grad); color:#fff; }
+  #toast { position:fixed; left:50%; bottom:90px; transform:translate(-50%,20px); z-index:200; background:var(--sidem); color:var(--text); border:1px solid var(--line); border-radius:14px; padding:12px 18px; box-shadow:0 14px 40px var(--shadow); opacity:0; pointer-events:none; transition:.3s; max-width:90vw; }
+  #toast.show { opacity:1; transform:translate(-50%,0); }
+  @media (max-width:760px) { .plans { grid-template-columns:1fr; } #status { padding:0 18px; } #planbtn { padding:5px 10px; } }
 </style>
 </head>
 <body>
@@ -215,7 +255,7 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
     <button id="themebtn" class="ghost" type="button" aria-label="Design wählen" title="Design wählen">🌌</button>
     <div id="themes"></div>
   </div>
-  <div id="who"><span id="uname"></span><button id="logout" class="ghost" type="button">Abmelden</button></div>
+  <div id="who"><span id="uname"></span><button id="planbtn" class="plan" type="button" title="Konto & Abo">…</button><button id="logout" class="ghost" type="button">Abmelden</button></div>
 </header>
 
 <form id="auth" autocomplete="on">
@@ -236,6 +276,7 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
   </div>
   <div id="col">
     <div id="chat"></div>
+    <div id="status"></div>
     <form id="form">
       <div class="box">
         <textarea id="input" rows="1" placeholder="Frag Lumora irgendetwas…" autofocus></textarea>
@@ -244,6 +285,9 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
     </form>
   </div>
 </div>
+
+<div id="modal" class="modal"><div class="sheet"><button id="mclose" class="x" type="button" aria-label="Schließen">✕</button><div id="mbody"></div></div></div>
+<div id="toast"></div>
 
 <script>
 const chat = document.getElementById('chat');
@@ -402,6 +446,7 @@ function showApp(name) {
   $('who').style.display = 'flex';
   $('uname').textContent = name; $('uname').dataset.i = name[0].toUpperCase();
   loadChats(true);
+  refreshMe();
 }
 function showAuth() {
   $('main').style.display = 'none';
@@ -545,6 +590,12 @@ async function submit() {
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
       bot.textContent = '⚠️ ' + (j.detail || 'Fehler');
+      if (res.status === 429) {
+        const b = document.createElement('button');
+        b.className = 'primary'; b.type = 'button'; b.style.cssText = 'display:block;margin-top:10px;padding:8px 16px';
+        b.textContent = '✦ Pro holen'; b.onclick = openAccount;
+        bot.appendChild(b);
+      }
     } else {
       const reader = res.body.getReader();
       const dec = new TextDecoder();
@@ -571,11 +622,178 @@ async function submit() {
   }
   send.disabled = false;
   loadChats();
+  refreshMe();
   input.focus();
 }
 
 $('form').addEventListener('submit', e => { e.preventDefault(); submit(); });
 input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } });
+
+/* ---------- Plan, Konto, Abo, Admin ---------- */
+let acct = null;
+const money = (c, cur) => (c / 100).toFixed(2) + ' ' + cur;
+const dateStr = ts => new Date(ts * 1000).toLocaleDateString('de-CH', { day: 'numeric', month: 'long', year: 'numeric' });
+const tok = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'k' : String(n);
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 4200);
+}
+async function refreshMe() {
+  try { acct = await (await api('/api/me')).json(); } catch (e) { return; }
+  const pro = acct.plan === 'pro';
+  const pb = $('planbtn');
+  pb.textContent = acct.is_admin ? '✦ Admin' : pro ? '✦ Pro' : 'Gratis';
+  pb.classList.toggle('pro', pro);
+  const st = $('status');
+  if (pro) {
+    st.innerHTML = '✦ <b>Claude Pro</b> · unbegrenzt';
+  } else {
+    const f = acct.free, pct = Math.min(100, Math.round(f.used / f.limit * 100));
+    st.innerHTML = 'Gemini (Gratis) · <span class="bar"><span class="fill' + (pct > 85 ? ' warn' : '') + '" style="width:' + pct + '%;display:block"></span></span> ' +
+      tok(f.used) + ' / ' + tok(f.limit) + ' Tokens heute · <button type="button" id="stup">Pro holen</button>';
+    $('stup').onclick = openAccount;
+  }
+  if ($('modal').classList.contains('open') && $('modal').dataset.view === 'account') renderAccount();
+}
+function openModal(view) { $('modal').dataset.view = view; $('modal').classList.add('open'); }
+function closeModal() { $('modal').classList.remove('open'); }
+$('mclose').onclick = closeModal;
+$('modal').addEventListener('mousedown', e => { if (e.target === $('modal')) closeModal(); });
+addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+$('planbtn').onclick = openAccount;
+
+function openAccount() { openModal('account'); renderAccount(); }
+function renderAccount() {
+  const a = acct; if (!a) return;
+  const price = money(a.price_cents, a.currency);
+  let card = '';
+  if (a.admin_needs_password_change) {
+    card = '<div class="card warn"><b>Bitte ändere dein Start-Passwort.</b><br>Du bist Admin, aber noch mit dem Start-Passwort angemeldet. Ändere es unten – dann werden Admin-Bereich und gratis Pro freigeschaltet.</div>';
+  } else if (a.is_admin) {
+    card = '<div class="card"><b>✦ Pro (Admin)</b> – gratis und unbegrenzt mit Claude.</div>' +
+      '<button class="primary" data-act="admin" type="button">Admin-Bereich öffnen</button>';
+  } else if (a.plan === 'pro') {
+    let txt;
+    if (a.auto_renew) txt = 'Dein Abo läuft. Es verlängert sich am <b>' + dateStr(a.pro_until) + '</b> automatisch (' + money(a.sub_price_cents, a.currency) + ' pro Monat).';
+    else if (a.ended_reason === 'price_change') txt = 'Dein Abo wurde wegen einer <b>Preisänderung</b> beendet. Pro läuft noch bis <b>' + dateStr(a.pro_until) + '</b>. Danach kannst du zum neuen Preis (' + price + ' pro Monat) wieder abonnieren.';
+    else if (a.ended_reason === 'cancelled') txt = 'Du hast gekündigt. Pro läuft noch bis <b>' + dateStr(a.pro_until) + '</b>, danach nutzt du Gemini (Gratis). Danach kannst du wieder abonnieren.';
+    else txt = 'Pro ist aktiv bis <b>' + dateStr(a.pro_until) + '</b>.';
+    card = '<div class="card"><b>✦ Lumora Pro</b><p>' + txt + '</p></div>' +
+      (a.auto_renew ? '<button class="btn danger" data-act="cancel" type="button">Abo kündigen</button>' : '');
+  } else {
+    const f = a.free;
+    const promo = a.promo ? '<div class="card promo">🎁 ' + esc(a.promo.name) + ': die ersten ' + a.promo.free_days + ' Tage gratis, danach ' + price + ' pro Monat.</div>' : '';
+    const note = a.ended_reason === 'price_change' ? '<p class="muted">Dein altes Abo ist wegen einer Preisänderung ausgelaufen. Neuer Preis: ' + price + ' pro Monat.</p>' :
+                 a.ended_reason === 'cancelled' ? '<p class="muted">Dein Abo ist ausgelaufen. Deine Chats sind alle noch da.</p>' : '';
+    const off = a.payments === 'off';
+    card = promo + note + '<div class="plans">' +
+      '<div class="card"><h4>Gratis</h4><ul><li>Gemini</li><li>' + tok(f.limit) + ' Tokens pro Tag</li><li>Heute: ' + tok(f.used) + ' genutzt</li></ul></div>' +
+      '<div class="card pro"><h4>✦ Pro</h4><ul><li>Claude (stärker)</li><li>Unbegrenzt chatten</li><li><b>' + price + '</b> / Monat</li><li>Jederzeit kündbar</li></ul></div></div>' +
+      '<button class="primary" data-act="buy" type="button"' + (off ? ' disabled' : '') + '>' +
+      (off ? 'Bezahlung bald verfügbar' : a.promo ? 'Gratis starten – ' + a.promo.free_days + ' Tage' : 'Pro holen – ' + price + ' / Monat') + '</button>';
+  }
+  $('mbody').innerHTML = '<h2>Dein Konto</h2><p class="muted">Angemeldet als <b>' + esc(a.username) + '</b></p>' + card +
+    '<p class="muted" style="margin-top:14px">Deine Chats bleiben immer gespeichert. Du kannst jeden Chat mit Gemini und mit Claude weiterführen, ganz egal, mit welchem Plan er begonnen hat.</p>' +
+    '<h3>Passwort ändern</h3><form id="pwform" class="pw" autocomplete="off">' +
+    '<input id="pw0" type="password" placeholder="Altes Passwort" autocomplete="current-password" required>' +
+    '<input id="pw1" type="password" placeholder="Neues Passwort (min. 8 Zeichen)" autocomplete="new-password" required>' +
+    '<button class="primary" type="submit">Passwort ändern</button></form>';
+}
+$('mbody').addEventListener('submit', async e => {
+  if (e.target.id !== 'pwform') return;
+  e.preventDefault();
+  const r = await fetch('/api/password', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ old: $('pw0').value, new: $('pw1').value }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { toast('⚠️ ' + (typeof j.detail === 'string' ? j.detail : 'Ungültige Eingabe')); return; }
+  toast('✓ Passwort geändert'); await refreshMe(); renderAccount();
+});
+$('mbody').addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'admin') return openAdmin();
+  if (act === 'buy') {
+    b.disabled = true;
+    const r = await fetch('/api/subscription/checkout', { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { toast('⚠️ ' + (j.detail || 'Fehler')); b.disabled = false; return; }
+    if (j.url) { location.href = j.url; return; }
+    toast('✦ Pro aktiviert (Testmodus, ohne Zahlung)'); await refreshMe();
+  } else if (act === 'cancel') {
+    if (!confirm('Abo wirklich kündigen? Pro bleibt bis zum Ende des bezahlten Zeitraums aktiv.')) return;
+    const r = await fetch('/api/subscription/cancel', { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    toast(r.ok ? '✓ Abo gekündigt' : '⚠️ ' + (j.detail || 'Fehler')); await refreshMe();
+  }
+});
+
+/* ---------- Admin ---------- */
+async function openAdmin() {
+  openModal('admin');
+  $('mbody').innerHTML = '<h2>Admin</h2><p class="muted">Lädt …</p>';
+  const r = await fetch('/api/admin/overview');
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { $('mbody').innerHTML = '<h2>Admin</h2><p>' + esc(j.detail || 'Fehler') + '</p>'; return; }
+  const s = j.settings, now = Date.now() / 1000;
+  const modeTxt = { off: 'Bezahlung ist AUS (nur du kannst Pro vergeben).', test: 'TESTMODUS: „Pro holen“ aktiviert Pro ohne Zahlung!', stripe: 'Echte Bezahlung über Stripe ist aktiv.' }[j.payments];
+  const promos = j.promos.map(p => '<div class="card"><b>' + esc(p.name) + '</b> · ' + p.free_days + ' Tage gratis' +
+    (p.ends_at ? ' · bis ' + dateStr(p.ends_at - 86400) : '') + ' ' + (p.active ? '<span class="tag pro">aktiv</span>' : '<span class="tag">aus</span>') +
+    '<div class="row2"><button class="btn" data-a="ptoggle" data-id="' + p.id + '">' + (p.active ? 'Ausschalten' : 'Einschalten') + '</button>' +
+    '<button class="btn danger" data-a="pdel" data-id="' + p.id + '">Löschen</button></div></div>').join('') || '<p class="muted">Noch keine Aktion.</p>';
+  const users = j.users.map(u => '<tr><td>' + esc(u.username) + (u.is_admin ? ' <span class="tag">Admin</span>' : '') + '</td><td>' +
+    (u.pro ? '<span class="tag pro">Pro</span>' + (u.is_admin ? '' : '<br><small class="muted">bis ' + dateStr(u.pro_until) + (u.auto_renew ? ' ↻' : '') + '</small>') : '<span class="tag">Gratis</span>') +
+    '</td><td>' + tok(u.tokens_today) + '</td><td>' + (u.is_admin ? '' :
+    '<button class="btn" data-a="grant" data-id="' + u.id + '">+30 Tage</button> ' +
+    (u.pro ? '<button class="btn danger" data-a="revoke" data-id="' + u.id + '">Entziehen</button>' : '')) + '</td></tr>').join('');
+  $('mbody').innerHTML = '<h2>Admin-Bereich</h2><p class="muted">' + esc(modeTxt) + '</p>' +
+    '<h3>Preis</h3><div class="row2"><input id="aprice" type="number" min="0.5" step="0.5" value="' + (s.price_cents / 100) + '"> <span>' + esc(s.currency) + ' / Monat</span>' +
+    '<button class="primary" data-a="price">Speichern</button></div>' +
+    '<p class="muted">Bei einer Preisänderung enden alle laufenden Abos automatisch zum Ende des bezahlten Monats. Danach kann man zum neuen Preis wieder abonnieren.</p>' +
+    '<h3>Gratis-Limit</h3><div class="row2"><input id="alimit" type="number" min="1000" step="1000" value="' + s.free_daily_tokens + '"> <span>Tokens pro Tag</span>' +
+    '<button class="primary" data-a="limit">Speichern</button></div>' +
+    '<h3>Aktionen</h3>' + promos +
+    '<div class="card"><b>Neue Aktion</b><div class="row2"><input id="pname" placeholder="Name, z. B. Erster Monat gratis" maxlength="60">' +
+    '<input id="pdays" type="number" min="1" max="365" value="30" style="max-width:90px"> <span>Tage gratis</span></div>' +
+    '<div class="row2"><span class="muted">Gültig bis (optional):</span><input id="pends" type="date"><button class="primary" data-a="padd">Anlegen</button></div>' +
+    '<p class="muted">Gilt für Nutzer, die noch nie eine Gratis-Phase hatten. Danach läuft das Abo zum normalen Preis weiter.</p></div>' +
+    '<h3>Nutzer (' + j.users.length + ')</h3><div style="overflow-x:auto"><table class="users"><tr><th>Name</th><th>Plan</th><th>Tokens heute</th><th></th></tr>' + users + '</table></div>' +
+    '<div class="row2" style="margin-top:14px"><button class="btn" data-a="back">← Zurück zum Konto</button></div>';
+}
+async function adminPost(url, body, method) {
+  const r = await fetch(url, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { toast('⚠️ ' + (typeof j.detail === 'string' ? j.detail : 'Fehler')); return null; }
+  return j;
+}
+$('mbody').addEventListener('click', async e => {
+  const b = e.target.closest('[data-a]'); if (!b) return;
+  const a = b.dataset.a, id = b.dataset.id;
+  let j = null;
+  if (a === 'back') { openAccount(); return; }
+  if (a === 'price') {
+    const p = parseFloat($('aprice').value);
+    if (!confirm('Preis auf ' + p.toFixed(2) + ' ändern?\n\nAlle laufenden Abos enden dann automatisch zum Ende des bezahlten Monats. Danach können Nutzer zum neuen Preis wieder abonnieren.')) return;
+    j = await adminPost('/api/admin/price', { price: p });
+    if (j) toast('✓ Preis gespeichert' + (j.ended_subscriptions ? ' · ' + j.ended_subscriptions + ' Abos laufen aus' : '') + (j.stripe_failed ? ' · ⚠️ ' + j.stripe_failed + ' Stripe-Kündigungen fehlgeschlagen' : ''));
+  }
+  else if (a === 'limit') { j = await adminPost('/api/admin/free-limit', { tokens: parseInt($('alimit').value, 10) }); if (j) toast('✓ Limit gespeichert'); }
+  else if (a === 'padd') { j = await adminPost('/api/admin/promos', { name: $('pname').value, free_days: parseInt($('pdays').value, 10), ends: $('pends').value || null }); if (j) toast('✓ Aktion angelegt'); }
+  else if (a === 'ptoggle') j = await adminPost('/api/admin/promos/' + id + '/toggle');
+  else if (a === 'pdel') { if (!confirm('Aktion löschen?')) return; j = await adminPost('/api/admin/promos/' + id, null, 'DELETE'); }
+  else if (a === 'grant') { j = await adminPost('/api/admin/users/' + id + '/grant', { days: 30 }); if (j) toast('✓ 30 Tage Pro vergeben'); }
+  else if (a === 'revoke') { if (!confirm('Pro wirklich entziehen?')) return; j = await adminPost('/api/admin/users/' + id + '/revoke'); }
+  if (j) { openAdmin(); refreshMe(); }
+});
+
+/* Rückkehr von der Bezahlseite */
+if (new URLSearchParams(location.search).get('checkout')) {
+  const ok = new URLSearchParams(location.search).get('checkout') === 'success';
+  history.replaceState(null, '', location.pathname);
+  setTimeout(() => {
+    toast(ok ? '✦ Danke! Pro wird in wenigen Sekunden freigeschaltet.' : 'Bezahlung abgebrochen.');
+    if (ok) [3000, 8000, 15000].forEach(t => setTimeout(refreshMe, t));
+  }, 600);
+}
 </script>
 </body>
 </html>
