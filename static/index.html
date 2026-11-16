@@ -2,86 +2,246 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a1a">
 <title>Lumora-KI</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23a78bfa'/%3E%3Cstop offset='1' stop-color='%2322d3ee'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='15' fill='url(%23g)'/%3E%3Cpath d='M16 6l2.6 7.4L26 16l-7.4 2.6L16 26l-2.6-7.4L6 16l7.4-2.6z' fill='white'/%3E%3C/svg%3E">
 <style>
-  :root { --bg:#0f1020; --panel:#1a1b33; --accent:#8b7cff; --text:#ececf5; --muted:#9a9bb8; }
-  * { box-sizing: border-box; }
-  body { margin:0; height:100vh; display:flex; flex-direction:column; background:var(--bg); color:var(--text); font:16px/1.5 system-ui,sans-serif; }
-  header { padding:14px 20px; font-weight:700; font-size:20px; border-bottom:1px solid #2a2b4a; }
-  header span { color:var(--accent); }
-  #main { flex:1; display:none; min-height:0; }
-  #side { width:260px; background:var(--panel); display:flex; flex-direction:column; padding:12px; gap:8px; overflow-y:auto; }
-  #side button.new { padding:10px; }
-  .ci { display:flex; align-items:center; gap:6px; padding:8px 10px; border-radius:10px; cursor:pointer; color:var(--muted); }
-  .ci:hover, .ci.on { background:var(--bg); color:var(--text); }
-  .ci span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .ci .del { background:none; color:var(--muted); padding:0 4px; }
-  #col { flex:1; display:flex; flex-direction:column; min-width:0; }
-  #menu { display:none; background:none; color:var(--text); font-size:22px; padding:0 12px 0 0; }
-  @media (max-width:700px) {
-    #side { position:fixed; top:55px; bottom:0; left:0; z-index:5; transform:translateX(-100%); transition:transform .2s; }
-    #side.open { transform:none; }
-    #menu { display:block; }
+  :root {
+    --bg:#07071a; --glass:rgba(255,255,255,.055); --glass2:rgba(255,255,255,.09);
+    --line:rgba(255,255,255,.10); --text:#eef0ff; --muted:#9a9cc4;
+    --a:#a78bfa; --b:#22d3ee; --c:#f472b6;
+    --grad:linear-gradient(135deg,#8b5cf6,#06b6d4);
   }
-  #chat { flex:1; min-height:0; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:12px; max-width:800px; width:100%; margin:0 auto; }
-  .msg { padding:12px 16px; border-radius:14px; max-width:85%; white-space:pre-wrap; word-wrap:break-word; }
-  .user { align-self:flex-end; background:var(--accent); color:#fff; }
-  .bot { align-self:flex-start; background:var(--panel); }
-  .hint { color:var(--muted); text-align:center; margin-top:20vh; }
-  form { display:flex; gap:10px; padding:16px 20px; max-width:800px; width:100%; margin:0 auto; }
-  textarea { flex:1; resize:none; background:var(--panel); color:var(--text); border:1px solid #2a2b4a; border-radius:12px; padding:12px; font:inherit; }
-  button { background:var(--accent); color:#fff; border:0; border-radius:12px; padding:0 22px; font:inherit; font-weight:600; cursor:pointer; }
-  #auth { display:none; margin:auto; background:var(--panel); padding:28px; border-radius:16px; width:min(360px,90vw); flex-direction:column; gap:12px; }
-  #auth h2 { margin:0 0 4px; }
-  #auth input { background:var(--bg); color:var(--text); border:1px solid #2a2b4a; border-radius:10px; padding:11px; font:inherit; }
-  #auth button { padding:11px; }
-  #err { color:#ff8a8a; min-height:1.4em; font-size:14px; }
-  .link { background:none; color:var(--accent); padding:0; text-align:center; }
-  #who { margin-left:auto; font-size:14px; color:var(--muted); display:none; align-items:center; gap:10px; }
-  #who button { padding:4px 12px; font-size:14px; }
-  button:disabled { opacity:.5; cursor:default; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; }
+  body {
+    margin:0; display:flex; flex-direction:column; height:100dvh; overflow:hidden;
+    background:var(--bg); color:var(--text);
+    font:16px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+
+  /* ---------- animierter Aurora-Hintergrund ---------- */
+  .aurora { position:fixed; inset:0; z-index:-1; overflow:hidden; }
+  .aurora i { position:absolute; width:60vmax; height:60vmax; border-radius:50%; filter:blur(90px); opacity:.45; animation:float 22s ease-in-out infinite; }
+  .aurora i:nth-child(1) { background:#6d28d9; top:-25vmax; left:-15vmax; }
+  .aurora i:nth-child(2) { background:#0891b2; bottom:-30vmax; right:-15vmax; animation-delay:-8s; }
+  .aurora i:nth-child(3) { background:#be185d; width:40vmax; height:40vmax; top:35%; left:45%; opacity:.22; animation-delay:-14s; }
+  @keyframes float { 0%,100% { transform:translate(0,0) scale(1); } 33% { transform:translate(6vmax,4vmax) scale(1.1); } 66% { transform:translate(-4vmax,7vmax) scale(.95); } }
+  .aurora::after { content:""; position:absolute; inset:0; background-image:radial-gradient(rgba(255,255,255,.07) 1px,transparent 1px); background-size:28px 28px; mask-image:radial-gradient(circle at 50% 40%,#000,transparent 75%); }
+
+  /* ---------- Kopfzeile ---------- */
+  header { display:flex; align-items:center; gap:12px; padding:12px 18px; padding-top:calc(12px + env(safe-area-inset-top)); border-bottom:1px solid var(--line); background:rgba(7,7,26,.55); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
+  .logo { display:flex; align-items:center; gap:10px; font-weight:800; font-size:20px; letter-spacing:-.02em; }
+  .logo svg { filter:drop-shadow(0 0 10px rgba(139,92,246,.7)); }
+  .logo b { background:linear-gradient(90deg,#c4b5fd,#67e8f9); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  #menu { display:none; background:var(--glass); border:1px solid var(--line); color:var(--text); width:38px; height:38px; border-radius:10px; font-size:18px; cursor:pointer; }
+  #who { margin-left:auto; display:none; align-items:center; gap:10px; font-size:14px; color:var(--muted); }
+  #uname { display:flex; align-items:center; gap:8px; }
+  #uname::before { content:attr(data-i); display:grid; place-items:center; width:28px; height:28px; border-radius:50%; background:var(--grad); color:#fff; font-weight:700; font-size:13px; }
+  .ghost { background:var(--glass); border:1px solid var(--line); color:var(--text); border-radius:10px; padding:6px 14px; font:inherit; font-size:14px; cursor:pointer; transition:.2s; }
+  .ghost:hover { background:var(--glass2); }
+
+  /* ---------- Anmeldung ---------- */
+  #auth { display:none; margin:auto; width:min(400px,92vw); flex-direction:column; gap:14px; padding:34px 30px; border-radius:24px; background:var(--glass); border:1px solid var(--line); backdrop-filter:blur(24px); -webkit-backdrop-filter:blur(24px); box-shadow:0 30px 80px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08); animation:pop .5s cubic-bezier(.2,.9,.3,1.2); }
+  @keyframes pop { from { opacity:0; transform:translateY(20px) scale(.96); } }
+  .orb { width:68px; height:68px; margin:0 auto 4px; border-radius:50%; background:var(--grad); display:grid; place-items:center; box-shadow:0 0 50px rgba(139,92,246,.65); animation:pulse 3.5s ease-in-out infinite; }
+  @keyframes pulse { 50% { box-shadow:0 0 70px rgba(34,211,238,.65); transform:scale(1.05); } }
+  #auth h2 { margin:6px 0 0; text-align:center; font-size:26px; letter-spacing:-.02em; }
+  #auth p { margin:0 0 6px; text-align:center; color:var(--muted); font-size:14px; }
+  #auth input { background:rgba(0,0,0,.35); color:var(--text); border:1px solid var(--line); border-radius:12px; padding:13px 14px; font:inherit; outline:none; transition:.2s; }
+  #auth input:focus { border-color:var(--a); box-shadow:0 0 0 3px rgba(167,139,250,.25); }
+  .primary { background:var(--grad); color:#fff; border:0; border-radius:12px; padding:13px; font:inherit; font-weight:700; cursor:pointer; box-shadow:0 8px 24px rgba(99,102,241,.4); transition:.2s; }
+  .primary:hover { transform:translateY(-1px); filter:brightness(1.1); }
+  .primary:active { transform:none; }
+  #err { color:#fda4af; min-height:1.3em; font-size:14px; text-align:center; }
+  .link { background:none; border:0; color:var(--b); font:inherit; font-size:14px; cursor:pointer; padding:0; }
+  .link:hover { text-decoration:underline; }
+
+  /* ---------- Hauptbereich ---------- */
+  #main { flex:1; display:none; min-height:0; }
+  #side { width:280px; flex-shrink:0; display:flex; flex-direction:column; gap:10px; padding:14px; overflow-y:auto; background:rgba(7,7,26,.45); border-right:1px solid var(--line); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
+  #newchat { display:flex; align-items:center; justify-content:center; gap:8px; }
+  .ci { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:12px; cursor:pointer; color:var(--muted); border:1px solid transparent; transition:.15s; animation:slide .3s both; }
+  @keyframes slide { from { opacity:0; transform:translateX(-8px); } }
+  .ci:hover { background:var(--glass); color:var(--text); }
+  .ci.on { background:var(--glass2); color:var(--text); border-color:var(--line); box-shadow:inset 3px 0 0 var(--a); }
+  .ci span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
+  .ci .del { background:none; border:0; color:var(--muted); cursor:pointer; opacity:0; transition:.15s; font-size:14px; padding:2px 4px; }
+  .ci:hover .del, .ci.on .del { opacity:.8; }
+  .ci .del:hover { color:#fda4af; opacity:1; }
+  #col { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #chat { flex:1; min-height:0; overflow-y:auto; scroll-behavior:smooth; padding:24px 18px 8px; display:flex; flex-direction:column; gap:22px; width:100%; max-width:820px; margin:0 auto; }
+  #chat::-webkit-scrollbar, #side::-webkit-scrollbar { width:8px; }
+  #chat::-webkit-scrollbar-thumb, #side::-webkit-scrollbar-thumb { background:rgba(255,255,255,.12); border-radius:8px; }
+
+  /* ---------- Nachrichten ---------- */
+  .row { display:flex; gap:12px; animation:rise .35s both; }
+  @keyframes rise { from { opacity:0; transform:translateY(10px); } }
+  .row.user { flex-direction:row-reverse; }
+  .av { flex-shrink:0; width:34px; height:34px; border-radius:50%; display:grid; place-items:center; font-weight:700; font-size:14px; }
+  .row.bot .av { background:var(--grad); box-shadow:0 0 18px rgba(139,92,246,.5); }
+  .row.user .av { background:var(--glass2); border:1px solid var(--line); }
+  .msg { min-width:0; max-width:calc(100% - 50px); padding:12px 16px; border-radius:18px; word-wrap:break-word; overflow-wrap:anywhere; }
+  .user .msg { background:linear-gradient(135deg,rgba(139,92,246,.85),rgba(99,102,241,.85)); border-bottom-right-radius:6px; box-shadow:0 8px 24px rgba(99,102,241,.25); white-space:pre-wrap; }
+  .bot .msg { background:var(--glass); border:1px solid var(--line); border-bottom-left-radius:6px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
+  .msg p { margin:0 0 10px; } .msg p:last-child, .msg ul:last-child, .msg ol:last-child { margin-bottom:0; }
+  .msg h1,.msg h2,.msg h3 { margin:14px 0 8px; line-height:1.3; letter-spacing:-.01em; } .msg h1 { font-size:1.35em; } .msg h2 { font-size:1.2em; } .msg h3 { font-size:1.05em; }
+  .msg ul,.msg ol { margin:0 0 10px; padding-left:22px; } .msg li { margin:3px 0; }
+  .msg a { color:var(--b); }
+  .msg blockquote { margin:0 0 10px; padding:4px 14px; border-left:3px solid var(--a); color:var(--muted); }
+  .msg code { background:rgba(0,0,0,.4); padding:2px 6px; border-radius:6px; font:0.88em ui-monospace,SFMono-Regular,Menlo,monospace; color:#c4b5fd; }
+  .code { margin:4px 0 12px; border-radius:12px; overflow:hidden; background:rgba(0,0,0,.5); border:1px solid var(--line); }
+  .code .bar { display:flex; justify-content:space-between; align-items:center; padding:6px 12px; font-size:12px; color:var(--muted); background:rgba(255,255,255,.05); }
+  .code .bar button { background:none; border:0; color:var(--muted); cursor:pointer; font:inherit; font-size:12px; }
+  .code .bar button:hover { color:var(--text); }
+  .code pre { margin:0; padding:12px 14px; overflow-x:auto; font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .code pre code { background:none; padding:0; color:#e2e8f0; }
+  .dots { display:inline-flex; gap:5px; padding:6px 0; }
+  .dots i { width:8px; height:8px; border-radius:50%; background:var(--a); animation:bounce 1.2s infinite; }
+  .dots i:nth-child(2) { animation-delay:.15s; background:var(--b); } .dots i:nth-child(3) { animation-delay:.3s; background:var(--c); }
+  @keyframes bounce { 0%,60%,100% { transform:translateY(0); opacity:.5; } 30% { transform:translateY(-6px); opacity:1; } }
+
+  /* ---------- Startbildschirm ---------- */
+  .hint { margin:auto; text-align:center; padding:20px; animation:rise .6s both; }
+  .hint .orb { width:84px; height:84px; margin-bottom:18px; }
+  .hint h1 { margin:0 0 6px; font-size:clamp(28px,5vw,40px); letter-spacing:-.03em; background:linear-gradient(90deg,#fff,#c4b5fd 50%,#67e8f9); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .hint p { margin:0 0 26px; color:var(--muted); }
+  .chips { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; max-width:640px; margin:0 auto; }
+  .chip { background:var(--glass); border:1px solid var(--line); color:var(--text); border-radius:999px; padding:10px 16px; font:inherit; font-size:14px; cursor:pointer; transition:.2s; }
+  .chip:hover { background:var(--glass2); border-color:var(--a); transform:translateY(-2px); box-shadow:0 8px 20px rgba(139,92,246,.25); }
+
+  /* ---------- Eingabe ---------- */
+  #form { display:flex; align-items:flex-end; gap:10px; width:100%; max-width:820px; margin:0 auto; padding:10px 18px; padding-bottom:calc(16px + env(safe-area-inset-bottom)); }
+  .box { flex:1; display:flex; align-items:flex-end; gap:8px; padding:8px 8px 8px 16px; border-radius:22px; background:var(--glass); border:1px solid var(--line); backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); transition:.2s; box-shadow:0 10px 40px rgba(0,0,0,.35); }
+  .box:focus-within { border-color:var(--a); box-shadow:0 0 0 3px rgba(167,139,250,.2), 0 10px 40px rgba(0,0,0,.35); }
+  #input { flex:1; resize:none; background:none; border:0; outline:none; color:var(--text); font:inherit; padding:8px 0; max-height:180px; }
+  #input::placeholder { color:var(--muted); }
+  #send { width:42px; height:42px; flex-shrink:0; border:0; border-radius:50%; background:var(--grad); color:#fff; cursor:pointer; display:grid; place-items:center; transition:.2s; box-shadow:0 6px 18px rgba(99,102,241,.45); }
+  #send:hover { transform:scale(1.08) rotate(-8deg); }
+  #send:disabled { opacity:.4; cursor:default; transform:none; }
+  .foot { text-align:center; font-size:12px; color:var(--muted); padding-bottom:6px; opacity:.7; }
+
+  @media (max-width:760px) {
+    #menu { display:block; }
+    #side { position:fixed; top:0; bottom:0; left:0; z-index:20; padding-top:calc(70px + env(safe-area-inset-top)); width:82vw; max-width:320px; background:rgba(10,10,30,.96); transform:translateX(-105%); transition:transform .25s; box-shadow:20px 0 60px rgba(0,0,0,.6); }
+    #side.open { transform:none; }
+    header { position:relative; z-index:30; }
+    #who #uname { display:none; }
+    .msg { max-width:calc(100% - 46px); }
+  }
 </style>
 </head>
 <body>
-<header style="display:flex;align-items:center"><button id="menu" type="button">☰</button><span>✦</span>&nbsp;Lumora-KI
-  <div id="who"><span id="uname"></span><button id="logout" type="button">Abmelden</button></div></header>
+<div class="aurora"><i></i><i></i><i></i></div>
+
+<header>
+  <button id="menu" type="button" aria-label="Menü">☰</button>
+  <div class="logo">
+    <svg width="30" height="30" viewBox="0 0 32 32"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><circle cx="16" cy="16" r="15" fill="url(#lg)"/><path d="M16 6l2.6 7.4L26 16l-7.4 2.6L16 26l-2.6-7.4L6 16l7.4-2.6z" fill="#fff"/></svg>
+    <b>Lumora</b>
+  </div>
+  <div id="who"><span id="uname"></span><button id="logout" class="ghost" type="button">Abmelden</button></div>
+</header>
+
 <form id="auth" autocomplete="on">
-  <h2 id="atitle">Anmelden</h2>
+  <div class="orb"><svg width="34" height="34" viewBox="0 0 32 32"><path d="M16 4l3 9 9 3-9 3-3 9-3-9-9-3 9-3z" fill="#fff"/></svg></div>
+  <h2 id="atitle">Willkommen zurück</h2>
+  <p id="asub">Melde dich an, um mit Lumora zu chatten.</p>
   <input id="user" placeholder="Benutzername" autocomplete="username" required>
   <input id="pass" type="password" placeholder="Passwort (min. 8 Zeichen)" autocomplete="current-password" required>
   <div id="err"></div>
-  <button id="abtn">Anmelden</button>
+  <button id="abtn" class="primary">Anmelden</button>
   <button id="toggle" type="button" class="link">Noch kein Konto? Registrieren</button>
 </form>
+
 <div id="main">
-<div id="side"><button class="new" id="newchat" type="button">+ Neuer Chat</button><div id="list"></div></div>
-<div id="col">
-<div id="chat"><div class="hint">Hallo! Ich bin Lumora. Frag mich alles.</div></div>
-<form id="form">
-  <textarea id="input" rows="2" placeholder="Schreib eine Nachricht…" autofocus></textarea>
-  <button id="send">Senden</button>
-</form>
-</div></div>
+  <div id="side">
+    <button class="primary" id="newchat" type="button"><span style="font-size:18px;line-height:1">+</span> Neuer Chat</button>
+    <div id="list"></div>
+  </div>
+  <div id="col">
+    <div id="chat"></div>
+    <form id="form">
+      <div class="box">
+        <textarea id="input" rows="1" placeholder="Frag Lumora irgendetwas…" autofocus></textarea>
+        <button id="send" type="submit" aria-label="Senden"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
 const chat = document.getElementById('chat');
 const input = document.getElementById('input');
 const send = document.getElementById('send');
 const $ = id => document.getElementById(id);
-let registering = false;
-
-let currentId = null;
 const list = $('list');
+let registering = false;
+let currentId = null;
 
+const SUGGESTIONS = [
+  '✨ Erkläre mir etwas Spannendes',
+  '💡 Gib mir eine kreative Idee',
+  '🧑‍💻 Hilf mir beim Programmieren',
+  '🌍 Übersetze einen Satz für mich',
+];
+
+/* ---------- Markdown (sicher: erst escapen, dann formatieren) ---------- */
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function inline(t) {
+  t = esc(t);
+  t = t.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+  t = t.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  t = t.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  return t;
+}
+function markdown(src) {
+  const blocks = [];
+  src = src.replace(/```([\w+#-]*)\n?([\s\S]*?)(```|$)/g, (_, lang, code) => {
+    blocks.push(
+      '<div class="code"><div class="bar"><span>' + esc(lang || 'code') +
+      '</span><button type="button" data-copy>Kopieren</button></div><pre><code>' +
+      esc(code.replace(/\n$/, '')) + '</code></pre></div>');
+    return '\n@@B' + (blocks.length - 1) + '@@\n';
+  });
+  const out = [];
+  let listType = null;
+  const close = () => { if (listType) { out.push('</' + listType + '>'); listType = null; } };
+  for (const line of src.split('\n')) {
+    let m;
+    if ((m = line.match(/^@@B(\d+)@@$/))) { close(); out.push(blocks[+m[1]]); }
+    else if ((m = line.match(/^(#{1,3})\s+(.*)/))) { close(); out.push('<h' + m[1].length + '>' + inline(m[2]) + '</h' + m[1].length + '>'); }
+    else if ((m = line.match(/^\s*[-*•]\s+(.*)/))) { if (listType !== 'ul') { close(); out.push('<ul>'); listType = 'ul'; } out.push('<li>' + inline(m[1]) + '</li>'); }
+    else if ((m = line.match(/^\s*\d+[.)]\s+(.*)/))) { if (listType !== 'ol') { close(); out.push('<ol>'); listType = 'ol'; } out.push('<li>' + inline(m[1]) + '</li>'); }
+    else if ((m = line.match(/^>\s?(.*)/))) { close(); out.push('<blockquote>' + inline(m[1]) + '</blockquote>'); }
+    else if (!line.trim()) { close(); }
+    else { close(); out.push('<p>' + inline(line) + '</p>'); }
+  }
+  close();
+  return out.join('');
+}
+chat.addEventListener('click', e => {
+  const b = e.target.closest('[data-copy]');
+  if (!b) return;
+  navigator.clipboard?.writeText(b.closest('.code').querySelector('code').textContent);
+  b.textContent = 'Kopiert ✓';
+  setTimeout(() => (b.textContent = 'Kopieren'), 1500);
+});
+
+/* ---------- Ansicht ---------- */
 function showApp(name) {
   $('auth').style.display = 'none';
   $('main').style.display = 'flex';
-  $('who').style.display = 'flex'; $('uname').textContent = name;
+  $('who').style.display = 'flex';
+  $('uname').textContent = name; $('uname').dataset.i = name[0].toUpperCase();
   loadChats(true);
 }
 function showAuth() {
   $('main').style.display = 'none';
-  $('who').style.display = 'none'; $('auth').style.display = 'flex';
+  $('who').style.display = 'none';
+  $('auth').style.display = 'flex';
 }
 async function api(url, opts) {
   const r = await fetch(url, opts);
@@ -89,14 +249,26 @@ async function api(url, opts) {
   return r;
 }
 function hint() {
-  chat.innerHTML = '<div class="hint">Hallo! Ich bin Lumora. Frag mich alles.</div>';
+  chat.innerHTML = '';
+  const h = document.createElement('div');
+  h.className = 'hint';
+  h.innerHTML = '<div class="orb"><svg width="40" height="40" viewBox="0 0 32 32"><path d="M16 4l3 9 9 3-9 3-3 9-3-9-9-3 9-3z" fill="#fff"/></svg></div>' +
+    '<h1>Hallo, ich bin Lumora</h1><p>Deine KI für alles. Frag mich, was du willst.</p><div class="chips"></div>';
+  for (const s of SUGGESTIONS) {
+    const c = document.createElement('button');
+    c.type = 'button'; c.className = 'chip'; c.textContent = s;
+    c.onclick = () => { input.value = s.replace(/^\S+\s/, ''); grow(); input.focus(); };
+    h.querySelector('.chips').appendChild(c);
+  }
+  chat.appendChild(h);
 }
 async function loadChats(openFirst) {
   const chats = await (await api('/api/chats')).json();
   list.innerHTML = '';
-  for (const c of chats) {
+  chats.forEach((c, i) => {
     const d = document.createElement('div');
     d.className = 'ci' + (c.id === currentId ? ' on' : '');
+    d.style.animationDelay = i * 25 + 'ms';
     const t = document.createElement('span'); t.textContent = c.title;
     const x = document.createElement('button'); x.className = 'del'; x.textContent = '✕'; x.title = 'Löschen';
     x.onclick = async e => {
@@ -109,7 +281,7 @@ async function loadChats(openFirst) {
     d.onclick = () => openChat(c.id);
     d.append(t, x);
     list.appendChild(d);
-  }
+  });
   if (openFirst) { if (chats.length) openChat(chats[0].id); else hint(); }
 }
 async function openChat(id) {
@@ -119,6 +291,7 @@ async function openChat(id) {
   chat.innerHTML = '';
   if (!c.messages.length) hint();
   for (const m of c.messages) add(m.role === 'user' ? 'user' : 'bot', m.content);
+  chat.style.scrollBehavior = 'auto'; chat.scrollTop = chat.scrollHeight; chat.style.scrollBehavior = '';
   loadChats();
 }
 $('newchat').onclick = async () => {
@@ -127,10 +300,13 @@ $('newchat').onclick = async () => {
   $('side').classList.remove('open');
 };
 $('menu').onclick = () => $('side').classList.toggle('open');
+chat.addEventListener('click', () => $('side').classList.remove('open'));
 
+/* ---------- Anmeldung ---------- */
 function setMode(reg) {
   registering = reg;
-  $('atitle').textContent = reg ? 'Konto erstellen' : 'Anmelden';
+  $('atitle').textContent = reg ? 'Konto erstellen' : 'Willkommen zurück';
+  $('asub').textContent = reg ? 'Erstelle dein kostenloses Lumora-Konto.' : 'Melde dich an, um mit Lumora zu chatten.';
   $('abtn').textContent = reg ? 'Registrieren' : 'Anmelden';
   $('toggle').textContent = reg ? 'Schon ein Konto? Anmelden' : 'Noch kein Konto? Registrieren';
   $('pass').autocomplete = reg ? 'new-password' : 'current-password';
@@ -157,14 +333,29 @@ $('logout').onclick = async () => {
   if (r.ok) showApp((await r.json()).username); else showAuth();
 })();
 
+/* ---------- Chat ---------- */
 function add(role, text) {
+  const row = document.createElement('div');
+  row.className = 'row ' + role;
+  const av = document.createElement('div');
+  av.className = 'av';
+  av.textContent = role === 'user' ? ($('uname').dataset.i || '•') : '✦';
   const d = document.createElement('div');
-  d.className = 'msg ' + role;
-  d.textContent = text;
-  chat.appendChild(d);
+  d.className = 'msg';
+  setText(d, role, text);
+  row.append(av, d);
+  chat.appendChild(row);
   chat.scrollTop = chat.scrollHeight;
   return d;
 }
+function setText(el, role, text) {
+  if (role === 'user' || el.closest('.row')?.classList.contains('user')) el.textContent = text;
+  else el.innerHTML = markdown(text);
+}
+function setBot(el, text) { el.innerHTML = markdown(text); }
+
+function grow() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 180) + 'px'; }
+input.addEventListener('input', grow);
 
 async function submit() {
   const text = input.value.trim();
@@ -176,9 +367,10 @@ async function submit() {
       currentId = c.id;
     }
     chat.querySelector('.hint')?.remove();
-    input.value = '';
+    input.value = ''; grow();
     add('user', text);
-    const bot = add('bot', '…');
+    const bot = add('bot', '');
+    bot.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
     let answer = '';
     const res = await api('/api/chats/' + currentId + '/messages', {
       method: 'POST',
@@ -202,11 +394,12 @@ async function submit() {
           const data = p.replace(/^data: /, '');
           if (data === '[DONE]') continue;
           const j = JSON.parse(data);
-          answer += j.error ? '\n⚠️ ' + j.error : j.text;
-          bot.textContent = answer;
+          answer += j.error ? '\n\n⚠️ ' + j.error : j.text;
+          setBot(bot, answer);
           chat.scrollTop = chat.scrollHeight;
         }
       }
+      if (!answer) bot.textContent = '⚠️ Keine Antwort erhalten.';
     }
   } catch (e) {
     if (e.message !== 'auth') add('bot', '⚠️ Verbindungsfehler: ' + e.message);
@@ -216,7 +409,7 @@ async function submit() {
   input.focus();
 }
 
-document.getElementById('form').addEventListener('submit', e => { e.preventDefault(); submit(); });
+$('form').addEventListener('submit', e => { e.preventDefault(); submit(); });
 input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } });
 </script>
 </body>
