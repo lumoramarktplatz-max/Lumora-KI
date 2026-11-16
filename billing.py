@@ -110,11 +110,11 @@ def eligible_promo(con, p: dict, now: float | None = None):
 def subscribe_block_reason(p: dict, now: float | None = None) -> str | None:
     now = now or time.time()
     if is_admin(p):
-        return "Als Admin hast du Pro gratis."
+        return "admin_free"
     if p["pro_until"] > now and p["auto_renew"]:
-        return "Du hast schon ein aktives Abo."
+        return "already_active"
     if p["pro_until"] > now:
-        return "Dein Pro läuft noch. Danach kannst du erneut abonnieren."
+        return "still_pro"
     return None
 
 

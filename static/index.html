@@ -96,9 +96,16 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
   .logo svg { filter:drop-shadow(0 0 10px var(--glow)); }
   .logo b { background:linear-gradient(90deg,var(--l1),var(--l2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
   #menu { display:none; background:var(--glass); border:1px solid var(--line); color:var(--text); width:38px; height:38px; border-radius:10px; font-size:18px; cursor:pointer; }
-  #themewrap { margin-left:auto; position:relative; }
+  #themewrap { margin-inline-start:auto; position:relative; }
+  #langwrap { position:relative; }
+  #langbtn { font-size:15px; padding:4px 11px; line-height:1.6; }
+  #langs { display:none; position:absolute; inset-inline-end:0; top:calc(100% + 10px); width:210px; max-height:min(70vh,440px); overflow-y:auto; padding:8px; border-radius:16px; background:var(--sidem); border:1px solid var(--line); box-shadow:0 20px 50px var(--shadow); flex-direction:column; gap:2px; animation:pop .2s both; z-index:60; }
+  #langs.open { display:flex; }
+  #langs button { display:flex; align-items:center; justify-content:space-between; gap:10px; background:none; border:0; color:var(--text); font:inherit; font-size:15px; padding:8px 12px; border-radius:10px; cursor:pointer; text-align:start; }
+  #langs button small { color:var(--muted); font-size:11px; text-transform:uppercase; }
+  #langs button:hover { background:var(--glass2); } #langs button.on { background:var(--glass2); box-shadow:inset 3px 0 0 var(--a); }
   #themebtn { font-size:18px; padding:4px 12px; line-height:1.5; }
-  #themes { display:none; position:absolute; right:0; top:calc(100% + 10px); min-width:180px; padding:8px; border-radius:16px; background:var(--sidem); border:1px solid var(--line); box-shadow:0 20px 50px var(--shadow); flex-direction:column; gap:2px; animation:pop .2s both; }
+  #themes { display:none; position:absolute; inset-inline-end:0; top:calc(100% + 10px); min-width:180px; padding:8px; border-radius:16px; background:var(--sidem); border:1px solid var(--line); box-shadow:0 20px 50px var(--shadow); flex-direction:column; gap:2px; animation:pop .2s both; }
   #themes.open { display:flex; }
   #themes button { display:flex; align-items:center; gap:10px; background:none; border:0; color:var(--text); font:inherit; font-size:15px; padding:9px 12px; border-radius:10px; cursor:pointer; text-align:left; }
   #themes button:hover { background:var(--glass2); }
@@ -130,7 +137,7 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
 
   /* ---------- Hauptbereich ---------- */
   #main { flex:1; display:none; min-height:0; }
-  #side { width:280px; flex-shrink:0; display:flex; flex-direction:column; gap:10px; padding:14px; overflow-y:auto; background:var(--side); border-right:1px solid var(--line); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
+  #side { width:280px; flex-shrink:0; display:flex; flex-direction:column; gap:10px; padding:14px; overflow-y:auto; background:var(--side); border-inline-end:1px solid var(--line); backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); }
   #newchat { display:flex; align-items:center; justify-content:center; gap:8px; }
   .ci { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:12px; cursor:pointer; color:var(--muted); border:1px solid transparent; transition:.15s; animation:slide .3s both; }
   @keyframes slide { from { opacity:0; transform:translateX(-8px); } }
@@ -193,8 +200,9 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
 
   @media (max-width:760px) {
     #menu { display:block; }
-    #side { position:fixed; top:0; bottom:0; left:0; z-index:20; padding-top:calc(70px + env(safe-area-inset-top)); width:82vw; max-width:320px; background:var(--sidem); transform:translateX(-105%); transition:transform .25s; box-shadow:20px 0 60px var(--shadow); }
+    #side { position:fixed; top:0; bottom:0; inset-inline-start:0; z-index:20; padding-top:calc(70px + env(safe-area-inset-top)); width:82vw; max-width:320px; background:var(--sidem); transform:translateX(-105%); transition:transform .25s; box-shadow:20px 0 60px var(--shadow); }
     #side.open { transform:none; }
+    html[dir="rtl"] #side { transform:translateX(105%); } html[dir="rtl"] #side.open { transform:none; }
     #who #uname { display:none; }
     .msg { max-width:calc(100% - 46px); }
   }
@@ -213,8 +221,8 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
   .modal { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.55); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
   .modal.open { display:flex; }
   .sheet { position:relative; width:min(600px,100%); max-height:92dvh; overflow:auto; background:var(--sidem); color:var(--text); border:1px solid var(--line); border-radius:24px; padding:26px 24px; box-shadow:0 30px 80px var(--shadow); animation:pop .3s both; }
-  .sheet .x { position:absolute; top:14px; right:14px; width:34px; height:34px; border-radius:50%; border:1px solid var(--line); background:var(--glass); color:var(--text); cursor:pointer; }
-  .sheet h2 { margin:0 0 4px; font-size:24px; letter-spacing:-.02em; padding-right:40px; }
+  .sheet .x { position:absolute; top:14px; inset-inline-end:14px; width:34px; height:34px; border-radius:50%; border:1px solid var(--line); background:var(--glass); color:var(--text); cursor:pointer; }
+  .sheet h2 { margin:0 0 4px; font-size:24px; letter-spacing:-.02em; padding-inline-end:40px; }
   .sheet h3 { margin:22px 0 8px; font-size:15px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
   .sheet p { margin:6px 0; } .sheet .muted, .muted { color:var(--muted); font-size:14px; }
   .card { background:var(--glass); border:1px solid var(--line); border-radius:16px; padding:14px 16px; margin:12px 0; }
@@ -228,11 +236,14 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
   .row2 { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:8px 0; }
   .row2 input { flex:1; min-width:110px; }
   .sheet .primary { padding:10px 18px; }
+  html[dir="rtl"] .ci.on { box-shadow:inset -3px 0 0 var(--a); } html[dir="rtl"] #themes button.on, html[dir="rtl"] #langs button.on { box-shadow:inset -3px 0 0 var(--a); }
+  html[dir="rtl"] #send svg { transform:none; } html[dir="rtl"] #themes button { text-align:right; }
+  html[dir="rtl"] .msg ul, html[dir="rtl"] .msg ol { padding-left:0; padding-inline-start:22px; }
   .btn { background:var(--glass2); border:1px solid var(--line); color:var(--text); border-radius:10px; padding:8px 14px; font:inherit; font-size:14px; cursor:pointer; }
   .btn:hover { border-color:var(--a); } .btn.danger { color:var(--errc); } .btn:disabled, .primary:disabled { opacity:.5; cursor:not-allowed; }
   .pw { display:flex; flex-direction:column; gap:8px; }
   table.users { width:100%; border-collapse:collapse; font-size:13px; }
-  table.users td, table.users th { padding:7px 6px; border-bottom:1px solid var(--line); text-align:left; vertical-align:middle; }
+  table.users td, table.users th { padding:7px 6px; border-bottom:1px solid var(--line); text-align:start; vertical-align:middle; }
   table.users th { color:var(--muted); font-weight:600; }
   .tag { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11px; font-weight:700; background:var(--glass2); }
   .tag.pro { background:var(--grad); color:#fff; }
@@ -252,8 +263,12 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
     <b>Lumora</b>
   </div>
   <div id="themewrap">
-    <button id="themebtn" class="ghost" type="button" aria-label="Design wählen" title="Design wählen">🌌</button>
+    <button id="themebtn" class="ghost" type="button" aria-label="Design" title="Design">🌌</button>
     <div id="themes"></div>
+  </div>
+  <div id="langwrap">
+    <button id="langbtn" class="ghost" type="button" aria-label="Language">🌐</button>
+    <div id="langs"></div>
   </div>
   <div id="who"><span id="uname"></span><button id="planbtn" class="plan" type="button" title="Konto & Abo">…</button><button id="logout" class="ghost" type="button">Abmelden</button></div>
 </header>
@@ -271,7 +286,7 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
 
 <div id="main">
   <div id="side">
-    <button class="primary" id="newchat" type="button"><span style="font-size:18px;line-height:1">+</span> Neuer Chat</button>
+    <button class="primary" id="newchat" type="button"><span style="font-size:18px;line-height:1">+</span> <span id="newchatT">Neuer Chat</span></button>
     <div id="list"></div>
   </div>
   <div id="col">
@@ -289,6 +304,7 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
 <div id="modal" class="modal"><div class="sheet"><button id="mclose" class="x" type="button" aria-label="Schließen">✕</button><div id="mbody"></div></div></div>
 <div id="toast"></div>
 
+<script src="/static/i18n.js"></script>
 <script>
 const chat = document.getElementById('chat');
 const input = document.getElementById('input');
@@ -297,6 +313,61 @@ const $ = id => document.getElementById(id);
 const list = $('list');
 let registering = false;
 let currentId = null;
+
+/* ---------- Sprache ---------- */
+function detectLang() {
+  try { const s = localStorage.getItem('lumora-lang'); if (s && I18N[s]) return s; } catch (e) {}
+  for (const l of navigator.languages || [navigator.language || 'en']) {
+    let c = String(l).toLowerCase().split('-')[0];
+    if (c === 'no' || c === 'nn') c = 'nb';
+    if (I18N[c]) return c;
+  }
+  return 'en';
+}
+let LANG = detectLang();
+const t = (k, v) => {
+  let s = (I18N[LANG] && I18N[LANG][k]) ?? I18N.en[k] ?? I18N.de[k] ?? k;
+  if (v) for (const x in v) s = s.split('{' + x + '}').join(v[x]);
+  return s;
+};
+const locale = () => LOCALES[LANG] || LANG;
+function errText(d) {
+  if (Array.isArray(d)) return t('e_invalid');
+  if (typeof d !== 'string') return t('e_generic');
+  const [code, arg] = d.split(':');
+  const key = 'e_' + (code === 'still_pro' ? 'already_active' : code);
+  return I18N.de[key] ? t(key, { m: arg }) : d;   // Admin-Meldungen bleiben Klartext
+}
+function buildLangMenu() {
+  const m = $('langs'); m.innerHTML = '';
+  for (const [code, name] of Object.entries(LANGS)) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = code === LANG ? 'on' : '';
+    b.innerHTML = '<span></span><small>' + code + '</small>'; b.firstChild.textContent = name;
+    b.onclick = () => { setLang(code); $('langs').classList.remove('open'); };
+    m.appendChild(b);
+  }
+}
+function setLang(code) {
+  LANG = I18N[code] ? code : 'en';
+  try { localStorage.setItem('lumora-lang', LANG); } catch (e) {}
+  applyLang();
+}
+function applyLang() {
+  document.documentElement.lang = LANG;
+  document.documentElement.dir = RTL.includes(LANG) ? 'rtl' : 'ltr';
+  $('user').placeholder = t('username'); $('pass').placeholder = t('password');
+  $('logout').textContent = t('logout'); $('newchatT').textContent = t('newChat');
+  input.placeholder = t('ph'); $('themebtn').title = t('design'); $('langbtn').title = t('lang');
+  setMode(registering);
+  buildThemeMenu(); buildLangMenu();
+  if (chat.querySelector('.hint')) hint();
+  if (acct) renderMe();
+  if ($('modal').classList.contains('open') && $('modal').dataset.view === 'account') renderAccount();
+  if ($('main').style.display === 'flex') loadChats();
+}
+$('langbtn').onclick = e => { e.stopPropagation(); $('themes').classList.remove('open'); $('langs').classList.toggle('open'); };
+document.addEventListener('click', e => { if (!e.target.closest('#langwrap')) $('langs').classList.remove('open'); });
 
 
 /* ---------- Jahreszeiten-Themes ---------- */
@@ -376,25 +447,24 @@ function addOpt(id, html) {
   $('themes').appendChild(b);
 }
 const sep = t => { const d = document.createElement('div'); d.className = 'sep'; d.textContent = t; $('themes').appendChild(d); };
-addOpt('auto', '<span class="sw" style="background:conic-gradient(#34d399,#fb923c,#ea580c,#3b82f6,#34d399)"></span>Automatisch <small>Jahreszeit</small>');
-addOpt('aurora', '<span class="sw" style="background:' + THEMES.aurora.sw + '"></span>' + THEMES.aurora.icon + ' Normal');
-sep('Manuell wählen');
-for (const id of ['fruehling', 'sommer', 'herbst', 'winter']) {
-  const t = THEMES[id];
-  addOpt(id, '<span class="sw" style="background:' + t.sw + '"></span>' + t.icon + ' ' + t.name);
+function buildThemeMenu() {
+  $('themes').innerHTML = '';
+  addOpt('auto', '<span class="sw" style="background:conic-gradient(#34d399,#fb923c,#ea580c,#3b82f6,#34d399)"></span><span>' + t('auto') + '</span> <small>' + t('season') + '</small>');
+  addOpt('aurora', '<span class="sw" style="background:' + THEMES.aurora.sw + '"></span>' + THEMES.aurora.icon + ' <span>' + t('normal') + '</span>');
+  sep(t('manual'));
+  for (const [id, key] of [['fruehling', 'spring'], ['sommer', 'summer'], ['herbst', 'autumn'], ['winter', 'winter']]) {
+    addOpt(id, '<span class="sw" style="background:' + THEMES[id].sw + '"></span>' + THEMES[id].icon + ' <span>' + t(key) + '</span>');
+  }
+  $('themes').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.id === pref()));
 }
-$('themebtn').onclick = e => { e.stopPropagation(); $('themes').classList.toggle('open'); };
+buildThemeMenu();
+$('themebtn').onclick = e => { e.stopPropagation(); $('langs').classList.remove('open'); $('themes').classList.toggle('open'); };
 document.addEventListener('click', e => { if (!e.target.closest('#themewrap')) $('themes').classList.remove('open'); });
 addEventListener('resize', sizeFx);
 sizeFx();
 applyPref(pref(), false);
 
-const SUGGESTIONS = [
-  '✨ Erkläre mir etwas Spannendes',
-  '💡 Gib mir eine kreative Idee',
-  '🧑‍💻 Hilf mir beim Programmieren',
-  '🌍 Übersetze einen Satz für mich',
-];
+const SUGGESTIONS = [['✨', 's1'], ['💡', 's2'], ['🧑‍💻', 's3'], ['🌍', 's4']];
 
 /* ---------- Markdown (sicher: erst escapen, dann formatieren) ---------- */
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -411,7 +481,7 @@ function markdown(src) {
   src = src.replace(/```([\w+#-]*)\n?([\s\S]*?)(```|$)/g, (_, lang, code) => {
     blocks.push(
       '<div class="code"><div class="bar"><span>' + esc(lang || 'code') +
-      '</span><button type="button" data-copy>Kopieren</button></div><pre><code>' +
+      '</span><button type="button" data-copy>' + t('copy') + '</button></div><pre><code>' +
       esc(code.replace(/\n$/, '')) + '</code></pre></div>');
     return '\n@@B' + (blocks.length - 1) + '@@\n';
   });
@@ -435,8 +505,8 @@ chat.addEventListener('click', e => {
   const b = e.target.closest('[data-copy]');
   if (!b) return;
   navigator.clipboard?.writeText(b.closest('.code').querySelector('code').textContent);
-  b.textContent = 'Kopiert ✓';
-  setTimeout(() => (b.textContent = 'Kopieren'), 1500);
+  b.textContent = t('copied');
+  setTimeout(() => (b.textContent = t('copy')), 1500);
 });
 
 /* ---------- Ansicht ---------- */
@@ -463,11 +533,12 @@ function hint() {
   const h = document.createElement('div');
   h.className = 'hint';
   h.innerHTML = '<div class="orb"><svg width="40" height="40" viewBox="0 0 32 32"><path d="M16 4l3 9 9 3-9 3-3 9-3-9-9-3 9-3z" fill="#fff"/></svg></div>' +
-    '<h1>Hallo, ich bin Lumora</h1><p>Deine KI für alles. Frag mich, was du willst.</p><div class="chips"></div>';
-  for (const s of SUGGESTIONS) {
+    '<h1></h1><p></p><div class="chips"></div>';
+  h.querySelector('h1').textContent = t('hello'); h.querySelector('p').textContent = t('helloSub');
+  for (const [emoji, key] of SUGGESTIONS) {
     const c = document.createElement('button');
-    c.type = 'button'; c.className = 'chip'; c.textContent = s;
-    c.onclick = () => { input.value = s.replace(/^\S+\s/, ''); grow(); input.focus(); };
+    c.type = 'button'; c.className = 'chip'; c.textContent = emoji + ' ' + t(key);
+    c.onclick = () => { input.value = t(key); grow(); input.focus(); };
     h.querySelector('.chips').appendChild(c);
   }
   chat.appendChild(h);
@@ -479,17 +550,17 @@ async function loadChats(openFirst) {
     const d = document.createElement('div');
     d.className = 'ci' + (c.id === currentId ? ' on' : '');
     d.style.animationDelay = i * 25 + 'ms';
-    const t = document.createElement('span'); t.textContent = c.title;
-    const x = document.createElement('button'); x.className = 'del'; x.textContent = '✕'; x.title = 'Löschen';
+    const lbl = document.createElement('span'); lbl.textContent = c.title === 'Neuer Chat' ? t('newChat') : c.title;
+    const x = document.createElement('button'); x.className = 'del'; x.textContent = '✕'; x.title = t('del');
     x.onclick = async e => {
       e.stopPropagation();
-      if (!confirm('Diesen Chat löschen?')) return;
+      if (!confirm(t('delConfirm'))) return;
       await api('/api/chats/' + c.id, { method: 'DELETE' });
       if (c.id === currentId) { currentId = null; hint(); }
       loadChats();
     };
     d.onclick = () => openChat(c.id);
-    d.append(t, x);
+    d.append(lbl, x);
     list.appendChild(d);
   });
   if (openFirst) { if (chats.length) openChat(chats[0].id); else hint(); }
@@ -515,10 +586,10 @@ chat.addEventListener('click', () => $('side').classList.remove('open'));
 /* ---------- Anmeldung ---------- */
 function setMode(reg) {
   registering = reg;
-  $('atitle').textContent = reg ? 'Konto erstellen' : 'Willkommen zurück';
+  $('atitle').textContent = reg ? t('createTitle') : t('welcome');
   $('asub').textContent = reg ? 'Erstelle dein kostenloses Lumora-Konto.' : 'Melde dich an, um mit Lumora zu chatten.';
-  $('abtn').textContent = reg ? 'Registrieren' : 'Anmelden';
-  $('toggle').textContent = reg ? 'Schon ein Konto? Anmelden' : 'Noch kein Konto? Registrieren';
+  $('abtn').textContent = reg ? t('register') : t('login');
+  $('toggle').textContent = reg ? t('toLogin') : t('toRegister');
   $('pass').autocomplete = reg ? 'new-password' : 'current-password';
   $('err').textContent = '';
 }
@@ -530,7 +601,7 @@ $('auth').addEventListener('submit', async e => {
     body: JSON.stringify({ username: $('user').value, password: $('pass').value }),
   });
   const j = await res.json().catch(() => ({}));
-  if (!res.ok) { $('err').textContent = typeof j.detail === 'string' ? j.detail : 'Ungültige Eingabe'; return; }
+  if (!res.ok) { $('err').textContent = errText(j.detail); return; }
   $('pass').value = '';
   showApp(j.username);
 });
@@ -589,11 +660,11 @@ async function submit() {
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      bot.textContent = '⚠️ ' + (j.detail || 'Fehler');
+      bot.textContent = '⚠️ ' + errText(j.detail);
       if (res.status === 429) {
         const b = document.createElement('button');
         b.className = 'primary'; b.type = 'button'; b.style.cssText = 'display:block;margin-top:10px;padding:8px 16px';
-        b.textContent = '✦ Pro holen'; b.onclick = openAccount;
+        b.textContent = '✦ ' + t('getPro'); b.onclick = openAccount;
         bot.appendChild(b);
       }
     } else {
@@ -610,15 +681,15 @@ async function submit() {
           const data = p.replace(/^data: /, '');
           if (data === '[DONE]') continue;
           const j = JSON.parse(data);
-          answer += j.error ? '\n\n⚠️ ' + j.error : j.text;
+          answer += (j.error || j.error_code) ? '\n\n⚠️ ' + (j.error_code ? errText(j.error_code) : j.error) : j.text;
           setBot(bot, answer);
           chat.scrollTop = chat.scrollHeight;
         }
       }
-      if (!answer) bot.textContent = '⚠️ Keine Antwort erhalten.';
+      if (!answer) bot.textContent = '⚠️ ' + t('noAnswer');
     }
   } catch (e) {
-    if (e.message !== 'auth') add('bot', '⚠️ Verbindungsfehler: ' + e.message);
+    if (e.message !== 'auth') add('bot', '⚠️ ' + t('connErr') + ': ' + e.message);
   }
   send.disabled = false;
   loadChats();
@@ -632,28 +703,32 @@ input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) {
 /* ---------- Plan, Konto, Abo, Admin ---------- */
 let acct = null;
 const money = (c, cur) => (c / 100).toFixed(2) + ' ' + cur;
-const dateStr = ts => new Date(ts * 1000).toLocaleDateString('de-CH', { day: 'numeric', month: 'long', year: 'numeric' });
+const dateStr = ts => new Date(ts * 1000).toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' });
 const tok = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'k' : String(n);
 function toast(msg) {
-  const t = $('toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 4200);
+  const el = $('toast'); el.textContent = msg; el.classList.add('show');
+  clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 4200);
 }
 async function refreshMe() {
   try { acct = await (await api('/api/me')).json(); } catch (e) { return; }
+  renderMe();
+  if ($('modal').classList.contains('open') && $('modal').dataset.view === 'account') renderAccount();
+}
+function renderMe() {
   const pro = acct.plan === 'pro';
   const pb = $('planbtn');
-  pb.textContent = acct.is_admin ? '✦ Admin' : pro ? '✦ Pro' : 'Gratis';
+  pb.textContent = acct.is_admin ? '✦ Admin' : pro ? '✦ ' + t('pro') : t('free');
   pb.classList.toggle('pro', pro);
   const st = $('status');
   if (pro) {
-    st.innerHTML = '✦ <b>Claude Pro</b> · unbegrenzt';
+    st.innerHTML = '✦ <b>' + t('proLine') + '</b>';
   } else {
     const f = acct.free, pct = Math.min(100, Math.round(f.used / f.limit * 100));
-    st.innerHTML = 'Gemini (Gratis) · <span class="bar"><span class="fill' + (pct > 85 ? ' warn' : '') + '" style="width:' + pct + '%;display:block"></span></span> ' +
-      tok(f.used) + ' / ' + tok(f.limit) + ' Tokens heute · <button type="button" id="stup">Pro holen</button>';
-    $('stup').onclick = openAccount;
+    st.innerHTML = '<span></span> <span class="bar"><span class="fill' + (pct > 85 ? ' warn' : '') + '" style="width:' + pct + '%;display:block"></span></span> <span></span> · <button type="button" id="stup"></button>';
+    const sp = st.querySelectorAll(':scope > span');
+    sp[0].textContent = t('freeModel') + ' ·'; sp[2].textContent = t('tokensToday', { u: tok(f.used), l: tok(f.limit) });
+    $('stup').textContent = t('getPro'); $('stup').onclick = openAccount;
   }
-  if ($('modal').classList.contains('open') && $('modal').dataset.view === 'account') renderAccount();
 }
 function openModal(view) { $('modal').dataset.view = view; $('modal').classList.add('open'); }
 function closeModal() { $('modal').classList.remove('open'); }
@@ -665,7 +740,7 @@ $('planbtn').onclick = openAccount;
 function openAccount() { openModal('account'); renderAccount(); }
 function renderAccount() {
   const a = acct; if (!a) return;
-  const price = money(a.price_cents, a.currency);
+  const price = money(a.price_cents, a.currency), subPrice = money(a.sub_price_cents, a.currency);
   let card = '';
   if (a.admin_needs_password_change) {
     card = '<div class="card warn"><b>Bitte ändere dein Start-Passwort.</b><br>Du bist Admin, aber noch mit dem Start-Passwort angemeldet. Ändere es unten – dann werden Admin-Bereich und gratis Pro freigeschaltet.</div>';
@@ -673,31 +748,32 @@ function renderAccount() {
     card = '<div class="card"><b>✦ Pro (Admin)</b> – gratis und unbegrenzt mit Claude.</div>' +
       '<button class="primary" data-act="admin" type="button">Admin-Bereich öffnen</button>';
   } else if (a.plan === 'pro') {
+    const d = '<b>' + dateStr(a.pro_until) + '</b>';
     let txt;
-    if (a.auto_renew) txt = 'Dein Abo läuft. Es verlängert sich am <b>' + dateStr(a.pro_until) + '</b> automatisch (' + money(a.sub_price_cents, a.currency) + ' pro Monat).';
-    else if (a.ended_reason === 'price_change') txt = 'Dein Abo wurde wegen einer <b>Preisänderung</b> beendet. Pro läuft noch bis <b>' + dateStr(a.pro_until) + '</b>. Danach kannst du zum neuen Preis (' + price + ' pro Monat) wieder abonnieren.';
-    else if (a.ended_reason === 'cancelled') txt = 'Du hast gekündigt. Pro läuft noch bis <b>' + dateStr(a.pro_until) + '</b>, danach nutzt du Gemini (Gratis). Danach kannst du wieder abonnieren.';
-    else txt = 'Pro ist aktiv bis <b>' + dateStr(a.pro_until) + '</b>.';
-    card = '<div class="card"><b>✦ Lumora Pro</b><p>' + txt + '</p></div>' +
-      (a.auto_renew ? '<button class="btn danger" data-act="cancel" type="button">Abo kündigen</button>' : '');
+    if (a.auto_renew) txt = t('renews', { date: d, p: subPrice });
+    else if (a.ended_reason === 'price_change') txt = t('priceChange', { date: d, p: price });
+    else if (a.ended_reason === 'cancelled') txt = t('cancelled', { date: d });
+    else txt = t('proUntil', { date: d });
+    card = '<div class="card"><b>✦ Lumora ' + t('pro') + '</b><p>' + txt + '</p></div>' +
+      (a.auto_renew ? '<button class="btn danger" data-act="cancel" type="button">' + t('cancelSub') + '</button>' : '');
   } else {
     const f = a.free;
-    const promo = a.promo ? '<div class="card promo">🎁 ' + esc(a.promo.name) + ': die ersten ' + a.promo.free_days + ' Tage gratis, danach ' + price + ' pro Monat.</div>' : '';
-    const note = a.ended_reason === 'price_change' ? '<p class="muted">Dein altes Abo ist wegen einer Preisänderung ausgelaufen. Neuer Preis: ' + price + ' pro Monat.</p>' :
-                 a.ended_reason === 'cancelled' ? '<p class="muted">Dein Abo ist ausgelaufen. Deine Chats sind alle noch da.</p>' : '';
+    const promo = a.promo ? '<div class="card promo">🎁 ' + t('promo', { name: esc(a.promo.name), d: a.promo.free_days, p: price }) + '</div>' : '';
+    const note = a.ended_reason === 'price_change' ? '<p class="muted">' + t('endedPrice', { p: price }) + '</p>' :
+                 a.ended_reason === 'cancelled' ? '<p class="muted">' + t('endedOld') + '</p>' : '';
     const off = a.payments === 'off';
     card = promo + note + '<div class="plans">' +
-      '<div class="card"><h4>Gratis</h4><ul><li>Gemini</li><li>' + tok(f.limit) + ' Tokens pro Tag</li><li>Heute: ' + tok(f.used) + ' genutzt</li></ul></div>' +
-      '<div class="card pro"><h4>✦ Pro</h4><ul><li>Claude (stärker)</li><li>Unbegrenzt chatten</li><li><b>' + price + '</b> / Monat</li><li>Jederzeit kündbar</li></ul></div></div>' +
+      '<div class="card"><h4>' + t('free') + '</h4><ul><li>Gemini</li><li>' + t('perDay', { l: tok(f.limit) }) + '</li><li>' + t('usedToday', { u: tok(f.used) }) + '</li></ul></div>' +
+      '<div class="card pro"><h4>✦ ' + t('pro') + '</h4><ul><li>' + t('claudeStronger') + '</li><li>' + t('unlimited') + '</li><li><b>' + t('perMonth', { p: price }) + '</b></li><li>' + t('cancelAny') + '</li></ul></div></div>' +
       '<button class="primary" data-act="buy" type="button"' + (off ? ' disabled' : '') + '>' +
-      (off ? 'Bezahlung bald verfügbar' : a.promo ? 'Gratis starten – ' + a.promo.free_days + ' Tage' : 'Pro holen – ' + price + ' / Monat') + '</button>';
+      (off ? t('soon') : a.promo ? t('startFree', { d: a.promo.free_days }) : t('buy', { p: price })) + '</button>';
   }
-  $('mbody').innerHTML = '<h2>Dein Konto</h2><p class="muted">Angemeldet als <b>' + esc(a.username) + '</b></p>' + card +
-    '<p class="muted" style="margin-top:14px">Deine Chats bleiben immer gespeichert. Du kannst jeden Chat mit Gemini und mit Claude weiterführen, ganz egal, mit welchem Plan er begonnen hat.</p>' +
-    '<h3>Passwort ändern</h3><form id="pwform" class="pw" autocomplete="off">' +
-    '<input id="pw0" type="password" placeholder="Altes Passwort" autocomplete="current-password" required>' +
-    '<input id="pw1" type="password" placeholder="Neues Passwort (min. 8 Zeichen)" autocomplete="new-password" required>' +
-    '<button class="primary" type="submit">Passwort ändern</button></form>';
+  $('mbody').innerHTML = '<h2>' + t('account') + '</h2><p class="muted">' + t('loggedAs', { n: '<b>' + esc(a.username) + '</b>' }) + '</p>' + card +
+    '<p class="muted" style="margin-top:14px">' + t('chatsNote') + '</p>' +
+    '<h3>' + t('changePw') + '</h3><form id="pwform" class="pw" autocomplete="off">' +
+    '<input id="pw0" type="password" placeholder="' + t('oldPw') + '" autocomplete="current-password" required>' +
+    '<input id="pw1" type="password" placeholder="' + t('newPw') + '" autocomplete="new-password" required>' +
+    '<button class="primary" type="submit">' + t('changePw') + '</button></form>';
 }
 $('mbody').addEventListener('submit', async e => {
   if (e.target.id !== 'pwform') return;
@@ -705,8 +781,8 @@ $('mbody').addEventListener('submit', async e => {
   const r = await fetch('/api/password', { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ old: $('pw0').value, new: $('pw1').value }) });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) { toast('⚠️ ' + (typeof j.detail === 'string' ? j.detail : 'Ungültige Eingabe')); return; }
-  toast('✓ Passwort geändert'); await refreshMe(); renderAccount();
+  if (!r.ok) { toast('⚠️ ' + errText(j.detail)); return; }
+  toast('✓ ' + t('pwDone')); await refreshMe(); renderAccount();
 });
 $('mbody').addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -716,14 +792,14 @@ $('mbody').addEventListener('click', async e => {
     b.disabled = true;
     const r = await fetch('/api/subscription/checkout', { method: 'POST' });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) { toast('⚠️ ' + (j.detail || 'Fehler')); b.disabled = false; return; }
+    if (!r.ok) { toast('⚠️ ' + errText(j.detail)); b.disabled = false; return; }
     if (j.url) { location.href = j.url; return; }
-    toast('✦ Pro aktiviert (Testmodus, ohne Zahlung)'); await refreshMe();
+    toast('✦ ' + t('testOn')); await refreshMe();
   } else if (act === 'cancel') {
-    if (!confirm('Abo wirklich kündigen? Pro bleibt bis zum Ende des bezahlten Zeitraums aktiv.')) return;
+    if (!confirm(t('cancelConfirm'))) return;
     const r = await fetch('/api/subscription/cancel', { method: 'POST' });
     const j = await r.json().catch(() => ({}));
-    toast(r.ok ? '✓ Abo gekündigt' : '⚠️ ' + (j.detail || 'Fehler')); await refreshMe();
+    toast(r.ok ? '✓ ' + t('cancelDone') : '⚠️ ' + errText(j.detail)); await refreshMe();
   }
 });
 
@@ -762,7 +838,7 @@ async function openAdmin() {
 async function adminPost(url, body, method) {
   const r = await fetch(url, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) { toast('⚠️ ' + (typeof j.detail === 'string' ? j.detail : 'Fehler')); return null; }
+  if (!r.ok) { toast('⚠️ ' + errText(j.detail)); return null; }
   return j;
 }
 $('mbody').addEventListener('click', async e => {
@@ -785,12 +861,14 @@ $('mbody').addEventListener('click', async e => {
   if (j) { openAdmin(); refreshMe(); }
 });
 
+applyLang();
+
 /* Rückkehr von der Bezahlseite */
 if (new URLSearchParams(location.search).get('checkout')) {
   const ok = new URLSearchParams(location.search).get('checkout') === 'success';
   history.replaceState(null, '', location.pathname);
   setTimeout(() => {
-    toast(ok ? '✦ Danke! Pro wird in wenigen Sekunden freigeschaltet.' : 'Bezahlung abgebrochen.');
+    toast(ok ? '✦ ' + t('thanks') : t('payCancel'));
     if (ok) [3000, 8000, 15000].forEach(t => setTimeout(refreshMe, t));
   }, 600);
 }

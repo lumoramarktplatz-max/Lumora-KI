@@ -2,6 +2,14 @@
 
 Ein allgemeiner KI-Assistent im Browser. Anbieter wählbar: Google Gemini (kostenlose Stufe) oder Claude.
 
+## Sprachen
+
+Die Oberfläche gibt es in 22 Sprachen (Deutsch, English, Français, Español, Italiano, Português, Nederlands,
+Dansk, Slovenščina, Svenska, Norsk, Suomi, Polski, Čeština, Hrvatski, Magyar, Türkçe, Русский, Українська,
+العربية, 日本語, 中文). Die Sprache wird beim ersten Besuch aus dem Browser erkannt und lässt sich über das
+Weltkugel-Symbol oben ändern. Die KI antwortet immer in der Sprache, in der du schreibst. Neue Sprache: in
+`static/i18n.js` einen Block kopieren und übersetzen. Der Admin-Bereich ist nur auf Deutsch.
+
 ## Pläne
 
 | | Gratis | Pro |

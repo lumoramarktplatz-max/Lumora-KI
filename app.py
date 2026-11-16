@@ -55,7 +55,7 @@ def token_hash(token: str) -> str:
 def current_user(request: Request):
     token = request.cookies.get(COOKIE)
     if not token:
-        raise HTTPException(401, "Nicht angemeldet")
+        raise HTTPException(401, "not_logged_in")
     with db() as con:
         row = con.execute(
             "SELECT u.id, u.username FROM sessions s JOIN users u ON u.id = s.user_id "
@@ -63,7 +63,7 @@ def current_user(request: Request):
             (token_hash(token), time.time()),
         ).fetchone()
     if not row:
-        raise HTTPException(401, "Nicht angemeldet")
+        raise HTTPException(401, "not_logged_in")
     return dict(row)
 
 
@@ -126,6 +126,14 @@ ensure_admin()
 
 
 # ============================================================ KI-Anbieter
+class UserError(Exception):
+    """Fehler mit Code, den die Oberfläche in der Sprache des Nutzers anzeigt."""
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
 client = None  # Claude-Client, wird erst bei Bedarf erstellt (liest ANTHROPIC_API_KEY)
 GEMINI_TRANSPORT = None  # nur für Tests austauschbar
 
@@ -133,7 +141,7 @@ GEMINI_TRANSPORT = None  # nur für Tests austauschbar
 async def generate_claude(history, usage):
     global client
     if not os.getenv("ANTHROPIC_API_KEY"):
-        raise RuntimeError("Das Pro-Modell ist noch nicht eingerichtet (ANTHROPIC_API_KEY fehlt).")
+        raise UserError("pro_not_configured")
     if client is None:
         client = AsyncAnthropic()
     async with client.messages.stream(
@@ -150,7 +158,7 @@ async def generate_claude(history, usage):
 
 async def generate_gemini(history, usage):
     if not GEMINI_KEY:
-        raise RuntimeError("GEMINI_API_KEY ist nicht gesetzt")
+        raise UserError("gemini_not_configured")
     body = {
         "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
         "contents": [
@@ -206,9 +214,9 @@ DUMMY_SALT = b"\0" * 16
 @app.post("/api/register")
 async def register(creds: Credentials, response: Response):
     if not USERNAME_RE.match(creds.username):
-        raise HTTPException(400, "Benutzername: 3–32 Zeichen (Buchstaben, Zahlen, _ . -)")
+        raise HTTPException(400, "bad_username")
     if not 8 <= len(creds.password) <= 200:
-        raise HTTPException(400, "Das Passwort muss mindestens 8 Zeichen lang sein")
+        raise HTTPException(400, "pw_short")
     salt = secrets.token_bytes(16)
     try:
         with db() as con:
@@ -217,7 +225,7 @@ async def register(creds: Credentials, response: Response):
                 (creds.username, salt, hash_pw(creds.password, salt), time.time()),
             )
     except UNIQUE_ERRORS:
-        raise HTTPException(409, "Dieser Benutzername ist schon vergeben")
+        raise HTTPException(409, "name_taken")
     start_session(response, user_id)
     return {"username": creds.username}
 
@@ -230,7 +238,7 @@ async def login(creds: Credentials, response: Response):
         fail = con.execute("SELECT fails, locked_until FROM login_fails WHERE username = ?", (name,)).fetchone()
         if fail and fail["locked_until"] > now:
             wait = int((fail["locked_until"] - now) // 60) + 1
-            raise HTTPException(429, f"Zu viele Fehlversuche. Bitte warte {wait} Min. und versuche es erneut.")
+            raise HTTPException(429, f"locked:{wait}")
         row = con.execute(
             "SELECT id, username, salt, pw_hash FROM users WHERE lower(username) = lower(?)",
             (creds.username,),
@@ -247,7 +255,7 @@ async def login(creds: Credentials, response: Response):
             )
             # Fehler committen, bevor wir die Ausnahme werfen
             con.c.commit()
-            raise HTTPException(401, "Benutzername oder Passwort falsch")
+            raise HTTPException(401, "login_failed")
         con.execute("DELETE FROM login_fails WHERE username = ?", (name,))
     start_session(response, row["id"])
     return {"username": row["username"]}
@@ -272,13 +280,13 @@ async def me(user=Depends(current_user)):
 @app.post("/api/password")
 async def change_password(req: PasswordChange, request: Request, user=Depends(current_user)):
     if not 8 <= len(req.new) <= 200:
-        raise HTTPException(400, "Das neue Passwort muss mindestens 8 Zeichen lang sein")
+        raise HTTPException(400, "pw_short")
     if req.new == req.old or req.new == DEFAULT_ADMIN_PW:
-        raise HTTPException(400, "Bitte wähle ein anderes, neues Passwort")
+        raise HTTPException(400, "pw_same")
     with db() as con:
         row = con.execute("SELECT salt, pw_hash FROM users WHERE id = ?", (user["id"],)).fetchone()
         if not hmac.compare_digest(hash_pw(req.old[:200], row["salt"]), row["pw_hash"]):
-            raise HTTPException(403, "Das alte Passwort ist falsch")
+            raise HTTPException(403, "old_wrong")
         salt = secrets.token_bytes(16)
         con.execute(
             "UPDATE users SET salt = ?, pw_hash = ? WHERE id = ?", (salt, hash_pw(req.new, salt), user["id"])
@@ -299,7 +307,7 @@ def owned_chat(con, chat_id: int, user_id: int):
         "SELECT id, title FROM chats WHERE id = ? AND user_id = ?", (chat_id, user_id)
     ).fetchone()
     if not row:
-        raise HTTPException(404, "Chat nicht gefunden")
+        raise HTTPException(404, "chat_not_found")
     return row
 
 
@@ -346,9 +354,9 @@ async def delete_chat(chat_id: int, user=Depends(current_user)):
 async def send_message(chat_id: int, req: SendRequest, user=Depends(current_user)):
     text = req.content.strip()
     if not text:
-        raise HTTPException(400, "Leere Nachricht")
+        raise HTTPException(400, "msg_empty")
     if len(text) > 20000:
-        raise HTTPException(400, "Nachricht ist zu lang")
+        raise HTTPException(400, "msg_long")
     uid = user["id"]
     with db() as con:
         chat = owned_chat(con, chat_id, uid)
@@ -358,11 +366,7 @@ async def send_message(chat_id: int, req: SendRequest, user=Depends(current_user
         if not pro:
             limit = billing.get_settings(con)["free_daily_tokens"]
             if billing.tokens_used(con, uid) >= limit:
-                raise HTTPException(
-                    429,
-                    "Dein Gratis-Limit für heute ist aufgebraucht. Morgen geht es weiter – "
-                    "oder hol dir Pro für unbegrenztes Chatten mit Claude.",
-                )
+                raise HTTPException(429, "limit_reached")
         con.execute(
             "INSERT INTO messages (chat_id, role, content, created) VALUES (?, 'user', ?, ?)",
             (chat_id, text, now),
@@ -386,6 +390,8 @@ async def send_message(chat_id: int, req: SendRequest, user=Depends(current_user
             async for chunk in generate(history, usage):
                 answer += chunk
                 yield f"data: {json.dumps({'text': chunk})}\n\n"
+        except UserError as e:
+            yield f"data: {json.dumps({'error_code': e.code})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
         finally:
@@ -409,7 +415,7 @@ async def send_message(chat_id: int, req: SendRequest, user=Depends(current_user
 async def subscribe(request: Request, user=Depends(current_user)):
     mode = billing.payments_mode()
     if mode == "off":
-        raise HTTPException(503, "Die Bezahlung ist noch nicht freigeschaltet.")
+        raise HTTPException(503, "pay_off")
     with db() as con:
         p = billing.get_profile(con, user["id"])
         reason = billing.subscribe_block_reason(p)
@@ -437,7 +443,7 @@ async def cancel_subscription(user=Depends(current_user)):
     with db() as con:
         p = billing.get_profile(con, user["id"])
         if not (p["auto_renew"] and p["pro_until"] > time.time()):
-            raise HTTPException(400, "Du hast kein laufendes Abo.")
+            raise HTTPException(400, "no_sub")
         sub = p["stripe_sub"]
     if sub and billing.payments_mode() == "stripe":
         try:
