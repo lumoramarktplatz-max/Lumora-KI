@@ -755,7 +755,8 @@ function renderAccount() {
     else if (a.ended_reason === 'cancelled') txt = t('cancelled', { date: d });
     else txt = t('proUntil', { date: d });
     card = '<div class="card"><b>✦ Lumora ' + t('pro') + '</b><p>' + txt + '</p></div>' +
-      (a.auto_renew ? '<button class="btn danger" data-act="cancel" type="button">' + t('cancelSub') + '</button>' : '');
+      '<div class="row2">' + (a.can_portal ? '<button class="btn" data-act="portal" type="button">' + t('manageBilling') + '</button>' : '') +
+      (a.auto_renew ? '<button class="btn danger" data-act="cancel" type="button">' + t('cancelSub') + '</button>' : '') + '</div>';
   } else {
     const f = a.free;
     const promo = a.promo ? '<div class="card promo">🎁 ' + t('promo', { name: esc(a.promo.name), d: a.promo.free_days, p: price }) + '</div>' : '';
@@ -790,11 +791,17 @@ $('mbody').addEventListener('click', async e => {
   if (act === 'admin') return openAdmin();
   if (act === 'buy') {
     b.disabled = true;
-    const r = await fetch('/api/subscription/checkout', { method: 'POST' });
+    const r = await fetch('/api/subscription/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang: LANG }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) { toast('⚠️ ' + errText(j.detail)); b.disabled = false; return; }
     if (j.url) { location.href = j.url; return; }
     toast('✦ ' + t('testOn')); await refreshMe();
+  } else if (act === 'portal') {
+    b.disabled = true;
+    const r = await fetch('/api/subscription/portal', { method: 'POST' });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { toast('⚠️ ' + errText(j.detail)); b.disabled = false; return; }
+    location.href = j.url;
   } else if (act === 'cancel') {
     if (!confirm(t('cancelConfirm'))) return;
     const r = await fetch('/api/subscription/cancel', { method: 'POST' });

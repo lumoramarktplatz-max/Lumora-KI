@@ -411,8 +411,16 @@ async def send_message(chat_id: int, req: SendRequest, user=Depends(current_user
 
 
 # ============================================================ Abo
+def public_base(request: Request) -> str:
+    return (os.getenv("PUBLIC_URL") or str(request.base_url)).rstrip("/")
+
+
 @app.post("/api/subscription/checkout")
 async def subscribe(request: Request, user=Depends(current_user)):
+    try:
+        lang = str((await request.json()).get("lang", ""))[:5]
+    except Exception:
+        lang = ""
     mode = billing.payments_mode()
     if mode == "off":
         raise HTTPException(503, "pay_off")
@@ -427,11 +435,8 @@ async def subscribe(request: Request, user=Depends(current_user)):
             billing.activate_test(con, user["id"])
             return {"ok": True}
     try:
-        base = str(request.base_url).rstrip("/")
-        if os.getenv("PUBLIC_URL"):
-            base = os.getenv("PUBLIC_URL").rstrip("/")
         url = await billing.stripe_checkout(
-            user, s["price_cents"], s["currency"], promo["free_days"] if promo else 0, base
+            user, s["price_cents"], s["currency"], promo["free_days"] if promo else 0, public_base(request), lang
         )
     except Exception as e:
         raise HTTPException(502, str(e))
@@ -455,14 +460,50 @@ async def cancel_subscription(user=Depends(current_user)):
     return {"ok": True}
 
 
+@app.post("/api/subscription/portal")
+async def subscription_portal(request: Request, user=Depends(current_user)):
+    if billing.payments_mode() != "stripe":
+        raise HTTPException(503, "pay_off")
+    with db() as con:
+        p = billing.get_profile(con, user["id"])
+    if not p["stripe_customer"]:
+        raise HTTPException(400, "no_sub")
+    try:
+        return {"url": await billing.stripe_portal(p["stripe_customer"], public_base(request) + "/")}
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
+
 @app.post("/api/stripe/webhook")
 async def stripe_webhook(request: Request):
     secret = os.getenv("STRIPE_WEBHOOK_SECRET")
     payload = await request.body()
     if not secret or not billing.verify_webhook(payload, request.headers.get("stripe-signature", ""), secret):
         raise HTTPException(400, "Ungültige Signatur")
+    event = json.loads(payload)
+    typ, obj = event.get("type", ""), (event.get("data") or {}).get("object") or {}
+    if typ.startswith("customer.subscription.") and obj.get("id"):
+        # Stripe liefert Ereignisse nicht immer in der richtigen Reihenfolge: lieber den aktuellen Stand holen.
+        try:
+            fresh = await billing.stripe_call("GET", f"/subscriptions/{obj['id']}")
+            if fresh.get("id") == obj["id"] and fresh.get("status"):
+                obj = fresh
+                event = {"type": typ, "data": {"object": fresh}}
+        except Exception:
+            pass  # Stand aus dem Ereignis verwenden
+        if typ == "customer.subscription.created":
+            uid = int((obj.get("metadata") or {}).get("user_id") or 0)
+            with db() as con:
+                p = billing.get_profile(con, uid) if uid else None
+            if p and p["stripe_sub"] and p["stripe_sub"] != obj["id"] and p["auto_renew"] and p["pro_until"] > time.time():
+                # Doppeltes Abo (z. B. zweimal bezahlt): das neue sofort beenden, damit nicht doppelt abgebucht wird
+                try:
+                    await billing.stripe_cancel_now(obj["id"])
+                except Exception:
+                    pass
+                return {"received": True, "duplicate_cancelled": obj["id"]}
     with db() as con:
-        billing.handle_event(con, json.loads(payload))
+        billing.handle_event(con, event)
     return {"received": True}
 
 

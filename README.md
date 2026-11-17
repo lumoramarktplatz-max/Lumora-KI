@@ -41,6 +41,31 @@ Dann http://localhost:8000 öffnen.
 
 Persönlichkeit anpassen: `SYSTEM_PROMPT` in `app.py`. Anbieter: `LUMORA_PROVIDER` (`gemini` oder `claude`), Modell ändern: `LUMORA_MODEL`.
 
+## Bezahlung mit Stripe einrichten
+
+Stripe zieht das Geld ein und schickt Lumora per Webhook Bescheid. Starte immer im **Testmodus** (kein echtes Geld).
+
+1. **Konto:** auf stripe.com ein Konto anlegen und oben den **Testmodus** einschalten.
+2. **Schlüssel:** Entwickler → API-Schlüssel → *Geheimer Schlüssel* (`sk_test_…`) kopieren.
+3. **Webhook:** Entwickler → Webhooks → *Endpoint hinzufügen*
+   - URL: `https://DEINE-SEITE.onrender.com/api/stripe/webhook`
+   - Ereignisse: `customer.subscription.created`, `customer.subscription.updated`,
+     `customer.subscription.deleted`, `checkout.session.completed`
+   - danach das *Signing secret* (`whsec_…`) kopieren.
+4. **Kundenportal** (Karte ändern, Rechnungen): Einstellungen → Billing → Kundenportal → aktivieren und speichern.
+   Außerdem unter Einstellungen → Billing → Abos und E-Mails „Zahlung fehlgeschlagen“-Mails einschalten.
+5. **Render → Environment:** `PAYMENTS_MODE=stripe`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+   `PUBLIC_URL=https://DEINE-SEITE.onrender.com`, `ANTHROPIC_API_KEY` eintragen → neu deployen.
+6. **Testen:** „Pro holen“ → Testkarte `4242 4242 4242 4242`, beliebiges Ablaufdatum in der Zukunft und CVC.
+   Nach wenigen Sekunden steht das Konto auf Pro. Dann kündigen und im Admin-Bereich den Preis ändern ausprobieren.
+7. **Live gehen:** Stripe-Konto aktivieren, den Testmodus ausschalten und im Live-Modus **neu** einen Schlüssel
+   (`sk_live_…`), einen Webhook (neues `whsec_…`) und das Kundenportal einrichten. Die Werte auf Render ersetzen.
+
+Was die App dabei selbst erledigt: Abo nach der Zahlung freischalten, Gratis-Phase der Aktion (`trial_period_days`),
+Kündigung zum Ende des bezahlten Zeitraums, Beenden aller Abos bei einer Preisänderung, doppelte Abos sofort
+beenden und veraltete Webhook-Ereignisse ignorieren (der aktuelle Stand wird bei Stripe nachgefragt).
+Nicht eingebaut: Mehrwertsteuer-Berechnung und Rückerstattungen (beides im Stripe-Dashboard).
+
 ## Deployment auf Render (kostenlos)
 
 Der Webdienst läuft auf Renders Gratis-Plan, die Daten (Konten & Chats) liegen in einer kostenlosen Postgres-Datenbank bei Neon, weil der Gratis-Plan von Render keinen dauerhaften Speicher hat.

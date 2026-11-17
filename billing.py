@@ -19,6 +19,10 @@ DEFAULTS = {"price_cents": 500, "currency": "CHF", "free_daily_tokens": 30000}
 INT_SETTINGS = {"price_cents", "free_daily_tokens"}
 STRIPE_API = "https://api.stripe.com/v1"
 STRIPE_TRANSPORT = None  # nur für Tests austauschbar
+# Sprachen, die die Stripe-Bezahlseite kennt (sonst "auto" = Browser-Sprache des Kunden)
+STRIPE_LOCALES = {"bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fil", "fr", "hr", "hu", "id", "it",
+                  "ja", "ko", "lt", "lv", "ms", "mt", "nb", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv",
+                  "th", "tr", "vi", "zh"}
 
 
 def payments_mode() -> str:
@@ -144,6 +148,7 @@ def account_info(con, user: dict, now: float | None = None) -> dict:
             "remaining": max(0, s["free_daily_tokens"] - used),
         },
         "payments": payments_mode(),
+        "can_portal": payments_mode() == "stripe" and bool(p["stripe_customer"]),
         "subscribe_block": subscribe_block_reason(p, now),
     }
 
@@ -223,7 +228,8 @@ async def stripe_call(method: str, path: str, data: dict | None = None) -> dict:
     return j
 
 
-async def stripe_checkout(user: dict, price_cents: int, currency: str, trial_days: int, base_url: str):
+async def stripe_checkout(user: dict, price_cents: int, currency: str, trial_days: int, base_url: str,
+                          lang: str = ""):
     data = {
         "mode": "subscription",
         "client_reference_id": str(user["id"]),
@@ -237,10 +243,17 @@ async def stripe_checkout(user: dict, price_cents: int, currency: str, trial_day
         "subscription_data[metadata][user_id]": str(user["id"]),
         "subscription_data[metadata][price_cents]": str(price_cents),
     }
+    data["locale"] = lang if lang in STRIPE_LOCALES else "auto"
     if trial_days:
         data["subscription_data[trial_period_days]"] = str(trial_days)
     session = await stripe_call("POST", "/checkout/sessions", data)
     return session["url"]
+
+
+async def stripe_portal(customer_id: str, return_url: str) -> str:
+    """Stripe-Kundenportal: Karte ändern, Rechnungen ansehen."""
+    s = await stripe_call("POST", "/billing_portal/sessions", {"customer": customer_id, "return_url": return_url})
+    return s["url"]
 
 
 async def stripe_cancel_at_period_end(sub_id: str):
@@ -273,8 +286,11 @@ def _period_end(sub: dict) -> int:
     return int(items[0]["current_period_end"]) if items and items[0].get("current_period_end") else 0
 
 
-def apply_subscription(con, sub: dict):
-    """Stripe-Abo-Zustand in unser Profil übernehmen."""
+def apply_subscription(con, sub: dict, adopt: bool = False):
+    """Stripe-Abo-Zustand in unser Profil übernehmen.
+
+    Ereignisse zu einem anderen als dem gespeicherten Abo (z. B. ein altes, beendetes) werden ignoriert;
+    nur ein neu angelegtes Abo (adopt=True) wird übernommen."""
     meta = sub.get("metadata") or {}
     uid = meta.get("user_id")
     if uid:
@@ -285,6 +301,8 @@ def apply_subscription(con, sub: dict):
     if not uid:
         return
     row = get_profile(con, uid)
+    if row["stripe_sub"] and row["stripe_sub"] != sub.get("id") and not adopt:
+        return
     status = sub.get("status", "")
     cancelling = bool(sub.get("cancel_at_period_end") or sub.get("cancel_at"))
     if status in ("active", "trialing", "past_due"):
@@ -319,12 +337,14 @@ def handle_event(con, event: dict):
     t, obj = event.get("type", ""), (event.get("data") or {}).get("object") or {}
     if t in ("customer.subscription.created", "customer.subscription.updated",
              "customer.subscription.deleted"):
-        apply_subscription(con, obj)
+        apply_subscription(con, obj, adopt=(t == "customer.subscription.created"))
     elif t == "checkout.session.completed" and obj.get("client_reference_id"):
         uid = int(obj["client_reference_id"])
-        get_profile(con, uid)
+        p = get_profile(con, uid)
+        new_sub = obj.get("subscription") or ""
+        active = p["auto_renew"] and p["pro_until"] > time.time()
+        keep_old = bool(p["stripe_sub"]) and p["stripe_sub"] != new_sub and active
         con.execute(
-            "UPDATE profiles SET stripe_customer = ?, stripe_sub = CASE WHEN ? != '' THEN ? "
-            "ELSE stripe_sub END WHERE user_id = ?",
-            (obj.get("customer") or "", obj.get("subscription") or "", obj.get("subscription") or "", uid),
+            "UPDATE profiles SET stripe_customer = ?, stripe_sub = ? WHERE user_id = ?",
+            (obj.get("customer") or p["stripe_customer"], p["stripe_sub"] if (keep_old or not new_sub) else new_sub, uid),
         )
