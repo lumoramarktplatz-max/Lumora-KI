@@ -19,6 +19,7 @@ DEFAULTS = {"price_cents": 500, "currency": "CHF", "free_daily_tokens": 30000}
 INT_SETTINGS = {"price_cents", "free_daily_tokens"}
 STRIPE_API = "https://api.stripe.com/v1"
 STRIPE_TRANSPORT = None  # nur für Tests austauschbar
+APP_TAG = "lumora"  # Marker, damit Ereignisse anderer Websites im selben Stripe-Konto ignoriert werden
 # Sprachen, die die Stripe-Bezahlseite kennt (sonst "auto" = Browser-Sprache des Kunden)
 STRIPE_LOCALES = {"bg", "cs", "da", "de", "el", "en", "es", "et", "fi", "fil", "fr", "hr", "hu", "id", "it",
                   "ja", "ko", "lt", "lv", "ms", "mt", "nb", "nl", "pl", "pt", "ro", "ru", "sk", "sl", "sv",
@@ -240,6 +241,8 @@ async def stripe_checkout(user: dict, price_cents: int, currency: str, trial_day
         "line_items[0][price_data][unit_amount]": str(price_cents),
         "line_items[0][price_data][recurring][interval]": "month",
         "line_items[0][price_data][product_data][name]": "Lumora Pro",
+        "metadata[app]": APP_TAG,
+        "subscription_data[metadata][app]": APP_TAG,
         "subscription_data[metadata][user_id]": str(user["id"]),
         "subscription_data[metadata][price_cents]": str(price_cents),
     }
@@ -292,8 +295,8 @@ def apply_subscription(con, sub: dict, adopt: bool = False):
     Ereignisse zu einem anderen als dem gespeicherten Abo (z. B. ein altes, beendetes) werden ignoriert;
     nur ein neu angelegtes Abo (adopt=True) wird übernommen."""
     meta = sub.get("metadata") or {}
-    uid = meta.get("user_id")
-    if uid:
+    uid = meta.get("user_id") if meta.get("app") == APP_TAG else None
+    if uid and str(uid).isdigit():
         uid = int(uid)
     else:
         r = con.execute("SELECT user_id FROM profiles WHERE stripe_sub = ?", (sub.get("id", ""),)).fetchone()
@@ -333,12 +336,22 @@ def apply_subscription(con, sub: dict, adopt: bool = False):
         )
 
 
+def is_ours(con, sub: dict) -> bool:
+    """Gehört dieses Stripe-Abo zu Lumora (und nicht zu einer anderen Website im selben Stripe-Konto)?"""
+    if (sub.get("metadata") or {}).get("app") == APP_TAG:
+        return True
+    return bool(sub.get("id")) and bool(
+        con.execute("SELECT 1 FROM profiles WHERE stripe_sub = ?", (sub["id"],)).fetchone()
+    )
+
+
 def handle_event(con, event: dict):
     t, obj = event.get("type", ""), (event.get("data") or {}).get("object") or {}
     if t in ("customer.subscription.created", "customer.subscription.updated",
              "customer.subscription.deleted"):
         apply_subscription(con, obj, adopt=(t == "customer.subscription.created"))
-    elif t == "checkout.session.completed" and obj.get("client_reference_id"):
+    elif (t == "checkout.session.completed" and (obj.get("metadata") or {}).get("app") == APP_TAG
+          and str(obj.get("client_reference_id") or "").isdigit()):
         uid = int(obj["client_reference_id"])
         p = get_profile(con, uid)
         new_sub = obj.get("subscription") or ""

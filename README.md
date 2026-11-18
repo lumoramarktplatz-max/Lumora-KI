@@ -61,6 +61,15 @@ Stripe zieht das Geld ein und schickt Lumora per Webhook Bescheid. Starte immer 
 7. **Live gehen:** Stripe-Konto aktivieren, den Testmodus ausschalten und im Live-Modus **neu** einen Schlüssel
    (`sk_live_…`), einen Webhook (neues `whsec_…`) und das Kundenportal einrichten. Die Werte auf Render ersetzen.
 
+**Schon ein Stripe-Konto für andere Websites?** Das geht, aber beachte:
+- Ein Webhook bekommt die Ereignisse des **ganzen Kontos**. Lumora markiert deshalb ihre eigenen Abos (`metadata.app=lumora`)
+  und ignoriert alles andere, auch Abos anderer Websites.
+- Das **Kundenportal** und die E-Mail-Einstellungen gelten für das ganze Konto. Wenn andere Websites sie nutzen, ändern
+  deine Einstellungen dort etwas mit. Sauberer ist ein eigenes Stripe-Konto für Lumora (Dashboard → Kontoname oben links →
+  *Neues Konto*, geht mit demselben Login). Dann sind Kunden, Auszahlungen und Rechnungen getrennt.
+- Für `STRIPE_SECRET_KEY` empfiehlt sich ein **eingeschränkter Schlüssel** (`rk_…`) mit Schreibrechten für *Checkout Sessions*,
+  *Subscriptions* und *Customer portal sessions* und Leserechten für *Customers*.
+
 Was die App dabei selbst erledigt: Abo nach der Zahlung freischalten, Gratis-Phase der Aktion (`trial_period_days`),
 Kündigung zum Ende des bezahlten Zeitraums, Beenden aller Abos bei einer Preisänderung, doppelte Abos sofort
 beenden und veraltete Webhook-Ereignisse ignorieren (der aktuelle Stand wird bei Stripe nachgefragt).

@@ -483,6 +483,10 @@ async def stripe_webhook(request: Request):
     event = json.loads(payload)
     typ, obj = event.get("type", ""), (event.get("data") or {}).get("object") or {}
     if typ.startswith("customer.subscription.") and obj.get("id"):
+        with db() as con:
+            ours = billing.is_ours(con, obj)
+        if not ours:  # Abo einer anderen Website im selben Stripe-Konto
+            return {"received": True, "ignored": True}
         # Stripe liefert Ereignisse nicht immer in der richtigen Reihenfolge: lieber den aktuellen Stand holen.
         try:
             fresh = await billing.stripe_call("GET", f"/subscriptions/{obj['id']}")
@@ -492,7 +496,8 @@ async def stripe_webhook(request: Request):
         except Exception:
             pass  # Stand aus dem Ereignis verwenden
         if typ == "customer.subscription.created":
-            uid = int((obj.get("metadata") or {}).get("user_id") or 0)
+            meta = obj.get("metadata") or {}
+            uid = int(meta["user_id"]) if meta.get("app") == billing.APP_TAG and str(meta.get("user_id", "")).isdigit() else 0
             with db() as con:
                 p = billing.get_profile(con, uid) if uid else None
             if p and p["stripe_sub"] and p["stripe_sub"] != obj["id"] and p["auto_renew"] and p["pro_until"] > time.time():
