@@ -221,6 +221,18 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
   .mswitch { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; margin-inline-start:6px; }
   .mswitch button { background:none; border:0; color:var(--muted); font:inherit; font-size:12px; font-weight:700; padding:3px 12px; cursor:pointer; text-decoration:none !important; }
   .mswitch button.on { background:var(--grad); color:#fff; }
+  .badge { display:inline-block; min-width:18px; height:18px; border-radius:9px; background:#ef4444; color:#fff; font-size:11px; font-weight:700; text-align:center; line-height:18px; margin-inline-start:6px; padding:0 5px; }
+  .plan { position:relative; }
+  .plan[data-dot="1"]::after { content:''; position:absolute; top:-2px; inset-inline-end:-2px; width:10px; height:10px; border-radius:50%; background:#ef4444; border:2px solid var(--bg); }
+  .sbox { max-height:42vh; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin:12px 0; padding:2px; }
+  .sm { max-width:88%; padding:8px 12px; border-radius:14px; background:var(--glass); border:1px solid var(--line); white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; }
+  .sm.me { align-self:flex-end; background:var(--ubub); color:#fff; border-color:transparent; }
+  .sm small { display:block; opacity:.7; font-size:11px; margin-bottom:2px; }
+  .sform { display:flex; gap:8px; align-items:flex-end; }
+  .sform textarea { flex:1; background:var(--inp); color:var(--text); border:1px solid var(--line); border-radius:12px; padding:10px 12px; font:inherit; resize:vertical; min-height:44px; outline:none; }
+  .sform textarea:focus { border-color:var(--a); box-shadow:0 0 0 3px var(--ring); }
+  .thread { display:block; width:100%; text-align:start; background:var(--glass); border:1px solid var(--line); color:var(--text); border-radius:12px; padding:10px 12px; margin:6px 0; font:inherit; cursor:pointer; }
+  .thread:hover { border-color:var(--a); } .thread small { color:var(--muted); display:block; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .modal { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.55); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
   .modal.open { display:flex; }
   .sheet { position:relative; width:min(600px,100%); max-height:92dvh; overflow:auto; background:var(--sidem); color:var(--text); border:1px solid var(--line); border-radius:24px; padding:26px 24px; box-shadow:0 30px 80px var(--shadow); animation:pop .3s both; }
@@ -705,6 +717,7 @@ input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) {
 
 /* ---------- Plan, Konto, Abo, Admin ---------- */
 let acct = null;
+let SUP = { unread: 0, admin_unread: 0 };
 let MODEL = (() => { try { return localStorage.getItem('lumora-model') === 'free' ? 'free' : 'pro'; } catch (e) { return 'pro'; } })();
 const money = (c, cur) => (c / 100).toFixed(2) + ' ' + cur;
 const dateStr = ts => new Date(ts * 1000).toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' });
@@ -717,7 +730,20 @@ async function refreshMe() {
   try { acct = await (await api('/api/me')).json(); } catch (e) { return; }
   renderMe();
   if ($('modal').classList.contains('open') && $('modal').dataset.view === 'account') renderAccount();
+  pollSupport();
 }
+async function pollSupport() {
+  try {
+    const r = await fetch('/api/support/unread'); if (!r.ok) return;
+    SUP = await r.json();
+  } catch (e) { return; }
+  $('planbtn').dataset.dot = (SUP.unread + SUP.admin_unread) > 0 ? '1' : '0';
+  const v = $('modal').classList.contains('open') ? $('modal').dataset.view : '';
+  if (v === 'account') renderAccount();
+  if (v === 'support' && SUP.unread > 0) loadSupport();
+  if (v === 'adminsupport') openAdminSupport(true);
+}
+setInterval(() => { if (!document.hidden && acct) pollSupport(); }, 45000);
 function renderMe() {
   const pro = acct.plan === 'pro';
   const pb = $('planbtn');
@@ -782,12 +808,55 @@ function renderAccount() {
   }
   $('mbody').innerHTML = '<h2>' + t('account') + '</h2><p class="muted">' + t('loggedAs', { n: '<b>' + esc(a.username) + '</b>' }) + '</p>' + card +
     '<p class="muted" style="margin-top:14px">' + t('chatsNote') + '</p>' +
+    '<button class="btn" data-act="support" type="button">💬 ' + t('supportBtn') + (SUP.unread ? '<span class="badge">' + SUP.unread + '</span>' : '') + '</button>' +
     '<h3>' + t('changePw') + '</h3><form id="pwform" class="pw" autocomplete="off">' +
     '<input id="pw0" type="password" placeholder="' + t('oldPw') + '" autocomplete="current-password" required>' +
     '<input id="pw1" type="password" placeholder="' + t('newPw') + '" autocomplete="new-password" required>' +
     '<button class="primary" type="submit">' + t('changePw') + '</button></form>';
 }
+function openSupport() {
+  openModal('support');
+  $('mbody').innerHTML = '<h2></h2><p class="muted"></p><div id="sbox" class="sbox"></div>' +
+    '<form id="sform" class="sform"><textarea id="sin" rows="2" maxlength="2000"></textarea><button class="primary" type="submit"></button></form>' +
+    '<div class="row2" style="margin-top:12px"><button class="btn" data-act="account" type="button">←</button></div>';
+  $('mbody').querySelector('h2').textContent = t('supportBtn');
+  $('mbody').querySelector('p').textContent = t('supportIntro');
+  $('sin').placeholder = t('supportPh'); $('sform').querySelector('button').textContent = t('supportSend');
+  loadSupport();
+}
+function drawMsgs(box, msgs, mineSender, otherLabel) {
+  box.innerHTML = '';
+  if (!msgs.length) { const p = document.createElement('p'); p.className = 'muted'; p.textContent = t('supportEmpty'); box.appendChild(p); return; }
+  for (const m of msgs) {
+    const d = document.createElement('div'); d.className = 'sm' + (m.sender === mineSender ? ' me' : '');
+    const s = document.createElement('small');
+    s.textContent = (m.sender === mineSender ? '' : otherLabel + ' · ') + new Date(m.created * 1000).toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' });
+    const b = document.createElement('div'); b.textContent = m.body;   // nur Text, nie HTML
+    d.append(s, b); box.appendChild(d);
+  }
+  box.scrollTop = box.scrollHeight;
+}
+async function loadSupport() {
+  try { const r = await api('/api/support'); drawMsgs($('sbox'), await r.json(), 'user', t('supportName')); } catch (e) { return; }
+  pollSupport();
+}
+
 $('mbody').addEventListener('submit', async e => {
+  if (e.target.id === 'sform') {
+    e.preventDefault();
+    const body = $('sin').value.trim(); if (!body) return;
+    const r = await fetch('/api/support', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { toast('⚠️ ' + errText(j.detail)); return; }
+    $('sin').value = ''; loadSupport(); return;
+  }
+  if (e.target.id === 'rform') {
+    e.preventDefault();
+    const body = $('rin').value.trim(); if (!body) return;
+    const j = await adminPost('/api/admin/support/' + e.target.dataset.uid, { body });
+    if (j) { $('rin').value = ''; openAdminThread(e.target.dataset.uid); }
+    return;
+  }
   if (e.target.id !== 'pwform') return;
   e.preventDefault();
   const r = await fetch('/api/password', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -800,6 +869,8 @@ $('mbody').addEventListener('click', async e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const act = b.dataset.act;
   if (act === 'admin') return openAdmin();
+  if (act === 'support') return openSupport();
+  if (act === 'account') return openAccount();
   if (act === 'buy') {
     b.disabled = true;
     const r = await fetch('/api/subscription/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang: LANG }) });
@@ -840,6 +911,10 @@ async function openAdmin() {
     '<button class="btn" data-a="grant" data-id="' + u.id + '">+30 Tage</button> ' +
     (u.pro ? '<button class="btn danger" data-a="revoke" data-id="' + u.id + '">Entziehen</button>' : '')) + '</td></tr>').join('');
   $('mbody').innerHTML = '<h2>Admin-Bereich</h2><p class="muted">' + esc(modeTxt) + '</p>' +
+    (j.db.persistent ? '<p class="muted">✓ Daten werden dauerhaft gespeichert' + (j.db.postgres ? ' (Postgres)' : '') + '. Updates löschen nichts.</p>' :
+      '<div class="card warn"><b>⚠️ ACHTUNG: Die Datenbank ist NICHT dauerhaft!</b><br>Konten, Chats und Abos gehen bei jedem Update verloren. Trage auf Render <code>DATABASE_URL</code> (Neon) ein.</div>') +
+    '<div class="row2"><button class="btn" data-a="support" type="button">📬 Support-Postfach' + (SUP.admin_unread ? '<span class="badge">' + SUP.admin_unread + '</span>' : '') + '</button>' +
+    '<button class="btn" data-a="export" type="button">⬇ Abo-Liste herunterladen</button></div>' +
     '<h3>Verkauf</h3><div class="card"><b>' + (s.sales_open ? 'Verkauf ist offen' : 'Verkauf ist GESPERRT') + '</b><p class="muted">' +
     (s.sales_open ? 'Jeder kann „Pro holen“.' : 'Niemand kann im Moment Pro kaufen. Laufende Abos und alle Pro-Nutzer sind nicht betroffen.') + '</p>' +
     '<button class="' + (s.sales_open ? 'btn danger' : 'primary') + '" data-a="sales" data-open="' + (s.sales_open ? 0 : 1) + '">' + (s.sales_open ? 'Verkauf sperren' : 'Verkauf wieder öffnen') + '</button></div>' +
@@ -856,6 +931,38 @@ async function openAdmin() {
     '<h3>Nutzer (' + j.users.length + ')</h3><div style="overflow-x:auto"><table class="users"><tr><th>Name</th><th>Plan</th><th>Tokens heute</th><th></th></tr>' + users + '</table></div>' +
     '<div class="row2" style="margin-top:14px"><button class="btn" data-a="back">← Zurück zum Konto</button></div>';
 }
+async function openAdminSupport(quiet) {
+  if (!quiet) { openModal('adminsupport'); $('mbody').innerHTML = '<h2>Support-Postfach</h2><p class="muted">Lädt …</p>'; }
+  const r = await fetch('/api/admin/support'); const list = await r.json().catch(() => []);
+  if (!r.ok) { $('mbody').innerHTML = '<h2>Support-Postfach</h2><p>' + esc(list.detail || 'Fehler') + '</p>'; return; }
+  const box = document.createElement('div');
+  if (!list.length) box.innerHTML = '<p class="muted">Noch keine Nachrichten.</p>';
+  for (const x of list) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'thread'; b.dataset.a = 'sthread'; b.dataset.id = x.user_id;
+    const n = document.createElement('b'); n.textContent = x.username;
+    b.append(n);
+    if (x.pro) { const g = document.createElement('span'); g.className = 'tag pro'; g.style.marginInlineStart = '6px'; g.textContent = 'Pro'; b.append(g); }
+    if (x.unread) { const g = document.createElement('span'); g.className = 'badge'; g.textContent = x.unread; b.append(g); }
+    const s = document.createElement('small'); s.textContent = (x.last_sender === 'admin' ? 'Du: ' : '') + x.last_body + ' · ' + new Date(x.last_ts * 1000).toLocaleString('de-CH', { dateStyle: 'short', timeStyle: 'short' });
+    b.append(s); box.appendChild(b);
+  }
+  $('mbody').innerHTML = '<h2>Support-Postfach</h2><p class="muted">Nachrichten von Nutzern. Antworten erscheinen bei ihnen im Konto unter „Support“.</p>';
+  $('mbody').appendChild(box);
+  $('mbody').insertAdjacentHTML('beforeend', '<div class="row2" style="margin-top:14px"><button class="btn" data-a="sadmin" type="button">← Zurück zum Admin-Bereich</button></div>');
+}
+async function openAdminThread(uid) {
+  openModal('adminthread');
+  const r = await fetch('/api/admin/support/' + uid); const j = await r.json().catch(() => ({}));
+  if (!r.ok) { toast('⚠️ ' + errText(j.detail)); return; }
+  $('mbody').innerHTML = '<h2></h2><p class="muted"></p><div id="sbox" class="sbox"></div>' +
+    '<form id="rform" class="sform"><textarea id="rin" rows="3" maxlength="2000" placeholder="Deine Antwort …"></textarea><button class="primary" type="submit">Antworten</button></form>' +
+    '<div class="row2" style="margin-top:12px"><button class="btn" data-a="sback" type="button">← Postfach</button></div>';
+  $('rform').dataset.uid = uid;
+  $('mbody').querySelector('h2').textContent = j.username;
+  $('mbody').querySelector('p').textContent = j.pro ? 'Pro-Nutzer (bis ' + dateStr(j.pro_until) + ')' : 'Gratis-Nutzer';
+  drawMsgs($('sbox'), j.messages, 'admin', j.username);
+  pollSupport();
+}
 async function adminPost(url, body, method) {
   const r = await fetch(url, { method: method || 'POST', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(() => ({}));
@@ -867,6 +974,14 @@ $('mbody').addEventListener('click', async e => {
   const a = b.dataset.a, id = b.dataset.id;
   let j = null;
   if (a === 'back') { openAccount(); return; }
+  if (a === 'support' || a === 'sback') { openAdminSupport(); return; }
+  if (a === 'sadmin') { openAdmin(); return; }
+  if (a === 'sthread') { openAdminThread(id); return; }
+  if (a === 'export') {
+    const r = await fetch('/api/admin/export'); if (!r.ok) { toast('⚠️ Fehler'); return; }
+    const url = URL.createObjectURL(await r.blob()); const l = document.createElement('a');
+    l.href = url; l.download = 'lumora-abos.json'; l.click(); URL.revokeObjectURL(url); return;
+  }
   if (a === 'price') {
     const p = parseFloat($('aprice').value);
     if (!confirm('Preis auf ' + p.toFixed(2) + ' ändern?\n\nAlle laufenden Abos enden dann automatisch zum Ende des bezahlten Monats. Danach können Nutzer zum neuen Preis wieder abonnieren.')) return;

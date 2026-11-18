@@ -76,6 +76,10 @@ SCHEMA = [
     "tokens INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (user_id, day))",
     "CREATE TABLE IF NOT EXISTS login_fails (username TEXT NOT NULL PRIMARY KEY, "
     "fails INTEGER NOT NULL, locked_until REAL NOT NULL)",
+    # --- Support (Nachrichten zwischen Nutzer und Admin); seen = vom Empfänger gelesen
+    "CREATE TABLE IF NOT EXISTS support_messages (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL, "
+    "sender TEXT NOT NULL, body TEXT NOT NULL, created REAL NOT NULL, seen INTEGER NOT NULL DEFAULT 0)",
+    "CREATE INDEX IF NOT EXISTS idx_support_user ON support_messages(user_id, id)",
 ]
 
 

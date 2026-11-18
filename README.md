@@ -44,6 +44,20 @@ Dann http://localhost:8000 öffnen.
 
 Persönlichkeit anpassen: `SYSTEM_PROMPT` in `app.py`. Anbieter: `LUMORA_PROVIDER` (`gemini` oder `claude`), Modell ändern: `LUMORA_MODEL`.
 
+## Support (ein echter Mensch antwortet)
+
+Nutzer öffnen im Konto **Support kontaktieren** und schreiben dem Admin. Der Admin sieht neue Nachrichten im Admin-Bereich
+unter **Support-Postfach** (roter Punkt am Plan-Symbol) und antwortet dort. Die Antwort erscheint beim Nutzer im Support-Fenster.
+Pro Nutzer sind höchstens 20 Nachrichten pro Stunde erlaubt, jede höchstens 2000 Zeichen.
+
+## Daten bleiben bei Updates erhalten
+
+Konten, Abos, Chats, Einstellungen und Support-Nachrichten liegen in der Datenbank (`DATABASE_URL`, Neon). Ein Update
+ersetzt nur den Code. Beim Start werden Tabellen nur angelegt, wenn sie fehlen; nichts wird gelöscht oder überschrieben.
+Ohne `DATABASE_URL` läge alles in einer Datei, die Render bei jedem Deploy löscht. Darum warnt die App dann im Log und
+im Admin-Bereich. Im Admin-Bereich gibt es außerdem **Abo-Liste herunterladen** (ohne Passwörter) als Notfall-Sicherung.
+Neon bietet zusätzlich eine Wiederherstellung auf einen früheren Zeitpunkt (Neon → Branches → Restore).
+
 ## Bezahlung mit Stripe einrichten
 
 Stripe zieht das Geld ein und schickt Lumora per Webhook Bescheid. Starte immer im **Testmodus** (kein echtes Geld).

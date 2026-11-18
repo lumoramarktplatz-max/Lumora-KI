@@ -6,6 +6,7 @@ import json
 import os
 import re
 import secrets
+import sys
 import time
 from datetime import datetime
 
@@ -13,14 +14,14 @@ import httpx
 from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 load_dotenv()
 
 import billing  # noqa: E402  (nach load_dotenv, weil dort Umgebungsvariablen gelesen werden)
-from database import UNIQUE_ERRORS, db, init_db  # noqa: E402
+from database import PG, UNIQUE_ERRORS, db, init_db  # noqa: E402
 
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 # Gratis-Plan -> Gemini, Pro-Plan -> Claude
@@ -123,6 +124,10 @@ def ensure_admin():
         )
 
 
+ON_RENDER = bool(os.getenv("RENDER"))
+if ON_RENDER and not PG:
+    print("!!! WARNUNG: DATABASE_URL fehlt. Konten, Chats und Abos liegen in einer Datei, die bei jedem "
+          "Deploy gelöscht wird. Bitte DATABASE_URL (Neon) auf Render eintragen.", file=sys.stderr, flush=True)
 init_db()
 ensure_admin()
 
@@ -519,6 +524,115 @@ async def stripe_webhook(request: Request):
     return {"received": True}
 
 
+# ============================================================ Support (Mensch antwortet)
+SUPPORT_MAX, SUPPORT_PER_HOUR = 2000, 20
+
+
+class SupportMsg(BaseModel):
+    body: str
+
+
+@app.get("/api/support")
+async def support_thread(user=Depends(current_user)):
+    with db() as con:
+        rows = con.execute(
+            "SELECT id, sender, body, created FROM support_messages WHERE user_id = ? ORDER BY id DESC LIMIT 200",
+            (user["id"],),
+        ).fetchall()
+        con.execute(
+            "UPDATE support_messages SET seen = 1 WHERE user_id = ? AND sender = 'admin' AND seen = 0", (user["id"],)
+        )
+    return [dict(r) for r in reversed(rows)]
+
+
+@app.post("/api/support")
+async def support_send(req: SupportMsg, user=Depends(current_user)):
+    body = req.body.strip()
+    if not body:
+        raise HTTPException(400, "msg_empty")
+    if len(body) > SUPPORT_MAX:
+        raise HTTPException(400, "msg_long")
+    now = time.time()
+    with db() as con:
+        n = con.execute(
+            "SELECT COUNT(*) AS n FROM support_messages WHERE user_id = ? AND sender = 'user' AND created > ?",
+            (user["id"], now - 3600),
+        ).fetchone()["n"]
+        if n >= SUPPORT_PER_HOUR:
+            raise HTTPException(429, "support_rate")
+        con.execute(
+            "INSERT INTO support_messages (user_id, sender, body, created, seen) VALUES (?, 'user', ?, ?, 0)",
+            (user["id"], body, now),
+        )
+    return {"ok": True}
+
+
+@app.get("/api/support/unread")
+async def support_unread(user=Depends(current_user)):
+    with db() as con:
+        mine = con.execute(
+            "SELECT COUNT(*) AS n FROM support_messages WHERE user_id = ? AND sender = 'admin' AND seen = 0",
+            (user["id"],),
+        ).fetchone()["n"]
+        admin_n = 0
+        if billing.is_admin(billing.get_profile(con, user["id"])):
+            admin_n = con.execute(
+                "SELECT COUNT(DISTINCT user_id) AS n FROM support_messages WHERE sender = 'user' AND seen = 0"
+            ).fetchone()["n"]
+    return {"unread": mine, "admin_unread": admin_n}
+
+
+@app.get("/api/admin/support")
+async def admin_support_list(admin=Depends(require_admin)):
+    now = time.time()
+    with db() as con:
+        rows = con.execute(
+            "SELECT t.user_id, u.username, m.body AS last_body, m.sender AS last_sender, m.created AS last_ts, "
+            "t.unread, COALESCE(p.is_admin, 0) AS is_admin, COALESCE(p.pro_until, 0) AS pro_until "
+            "FROM (SELECT user_id, MAX(id) AS last_id, CAST(SUM(CASE WHEN sender = 'user' AND seen = 0 THEN 1 ELSE 0 END) AS INTEGER) AS unread "
+            "      FROM support_messages GROUP BY user_id) t "
+            "JOIN support_messages m ON m.id = t.last_id JOIN users u ON u.id = t.user_id "
+            "LEFT JOIN profiles p ON p.user_id = t.user_id ORDER BY t.last_id DESC LIMIT 200"
+        ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["pro"] = bool(d["is_admin"]) or d["pro_until"] > now
+        out.append(d)
+    return out
+
+
+@app.get("/api/admin/support/{uid}")
+async def admin_support_thread(uid: int, admin=Depends(require_admin)):
+    now = time.time()
+    with db() as con:
+        u = con.execute("SELECT id, username FROM users WHERE id = ?", (uid,)).fetchone()
+        if not u:
+            raise HTTPException(404, "Nutzer nicht gefunden")
+        p = billing.get_profile(con, uid, now)
+        rows = con.execute(
+            "SELECT id, sender, body, created FROM support_messages WHERE user_id = ? ORDER BY id DESC LIMIT 200", (uid,)
+        ).fetchall()
+        con.execute("UPDATE support_messages SET seen = 1 WHERE user_id = ? AND sender = 'user' AND seen = 0", (uid,))
+    return {"username": u["username"], "pro": billing.is_pro(p, now), "pro_until": p["pro_until"],
+            "messages": [dict(r) for r in reversed(rows)]}
+
+
+@app.post("/api/admin/support/{uid}")
+async def admin_support_reply(uid: int, req: SupportMsg, admin=Depends(require_admin)):
+    body = req.body.strip()
+    if not body or len(body) > SUPPORT_MAX:
+        raise HTTPException(400, "Nachricht leer oder zu lang (max. 2000 Zeichen).")
+    with db() as con:
+        if not con.execute("SELECT 1 FROM users WHERE id = ?", (uid,)).fetchone():
+            raise HTTPException(404, "Nutzer nicht gefunden")
+        con.execute(
+            "INSERT INTO support_messages (user_id, sender, body, created, seen) VALUES (?, 'admin', ?, ?, 0)",
+            (uid, body, time.time()),
+        )
+    return {"ok": True}
+
+
 # ============================================================ Admin
 class PriceReq(BaseModel):
     price: float
@@ -558,7 +672,23 @@ async def admin_overview(admin=Depends(require_admin)):
         d = dict(r)
         d["pro"] = bool(d["is_admin"]) or d["pro_until"] > now
         users.append(d)
-    return {"settings": s, "promos": promos, "users": users, "payments": billing.payments_mode()}
+    return {"settings": s, "promos": promos, "users": users, "payments": billing.payments_mode(),
+            "db": {"persistent": PG or not ON_RENDER, "postgres": PG}}
+
+
+@app.get("/api/admin/export")
+async def admin_export(admin=Depends(require_admin)):
+    """Abo-Liste als Datei (ohne Passwörter), als Notfall-Sicherung."""
+    with db() as con:
+        rows = con.execute(
+            "SELECT u.id, u.username, u.created, p.is_admin, p.pro_until, p.auto_renew, p.price_cents, "
+            "p.ended_reason, p.trial_used, p.stripe_customer, p.stripe_sub "
+            "FROM users u LEFT JOIN profiles p ON p.user_id = u.id ORDER BY u.id"
+        ).fetchall()
+        settings = billing.get_settings(con)
+    data = {"exported": datetime.now(billing.TZ).isoformat(timespec="seconds"), "settings": settings,
+            "users": [dict(r) for r in rows]}
+    return JSONResponse(data, headers={"Content-Disposition": 'attachment; filename="lumora-abos.json"'})
 
 
 @app.post("/api/admin/price")
@@ -661,7 +791,7 @@ async def admin_revoke(uid: int, admin=Depends(require_admin)):
 # ============================================================ Seiten
 @app.get("/api/health")
 async def health():
-    return {"ok": True}
+    return {"ok": True, "persistent_db": PG or not ON_RENDER}
 
 
 @app.get("/")
