@@ -218,6 +218,9 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
   #status .fill.warn { background:linear-gradient(90deg,#f59e0b,#ef4444); }
   #status button { background:none; border:0; color:var(--link); font:inherit; font-size:12px; font-weight:700; cursor:pointer; padding:0; }
   #status button:hover { text-decoration:underline; }
+  .mswitch { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; margin-inline-start:6px; }
+  .mswitch button { background:none; border:0; color:var(--muted); font:inherit; font-size:12px; font-weight:700; padding:3px 12px; cursor:pointer; text-decoration:none !important; }
+  .mswitch button.on { background:var(--grad); color:#fff; }
   .modal { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.55); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
   .modal.open { display:flex; }
   .sheet { position:relative; width:min(600px,100%); max-height:92dvh; overflow:auto; background:var(--sidem); color:var(--text); border:1px solid var(--line); border-radius:24px; padding:26px 24px; box-shadow:0 30px 80px var(--shadow); animation:pop .3s both; }
@@ -656,7 +659,7 @@ async function submit() {
     const res = await api('/api/chats/' + currentId + '/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: text }),
+      body: JSON.stringify({ content: text, model: MODEL }),
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
@@ -702,6 +705,7 @@ input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) {
 
 /* ---------- Plan, Konto, Abo, Admin ---------- */
 let acct = null;
+let MODEL = (() => { try { return localStorage.getItem('lumora-model') === 'free' ? 'free' : 'pro'; } catch (e) { return 'pro'; } })();
 const money = (c, cur) => (c / 100).toFixed(2) + ' ' + cur;
 const dateStr = ts => new Date(ts * 1000).toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' });
 const tok = n => n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'k' : String(n);
@@ -721,13 +725,19 @@ function renderMe() {
   pb.classList.toggle('pro', pro);
   const st = $('status');
   if (pro) {
-    st.innerHTML = '✦ <b>' + t('proLine') + '</b>';
+    st.innerHTML = '<span></span><span class="mswitch"><button type="button" data-m="pro"></button><button type="button" data-m="free"></button></span>';
+    st.firstChild.innerHTML = '✦ <b>' + t('pro') + '</b> · ' + t('unlimited');
+    st.querySelectorAll('.mswitch button').forEach(b => {
+      b.textContent = b.dataset.m === 'pro' ? '✦ ' + t('pro') : t('free');
+      b.classList.toggle('on', b.dataset.m === MODEL);
+      b.onclick = () => { MODEL = b.dataset.m; try { localStorage.setItem('lumora-model', MODEL); } catch (e) {} renderMe(); };
+    });
   } else {
     const f = acct.free, pct = Math.min(100, Math.round(f.used / f.limit * 100));
-    st.innerHTML = '<span></span> <span class="bar"><span class="fill' + (pct > 85 ? ' warn' : '') + '" style="width:' + pct + '%;display:block"></span></span> <span></span> · <button type="button" id="stup"></button>';
+    st.innerHTML = '<span></span> <span class="bar"><span class="fill' + (pct > 85 ? ' warn' : '') + '" style="width:' + pct + '%;display:block"></span></span> <span></span>' + (acct.sales_open ? ' · <button type="button" id="stup"></button>' : '');
     const sp = st.querySelectorAll(':scope > span');
-    sp[0].textContent = t('freeModel') + ' ·'; sp[2].textContent = t('tokensToday', { u: tok(f.used), l: tok(f.limit) });
-    $('stup').textContent = t('getPro'); $('stup').onclick = openAccount;
+    sp[0].textContent = t('free') + ' ·'; sp[2].textContent = t('tokensToday', { u: tok(f.used), l: tok(f.limit) });
+    if (acct.sales_open) { $('stup').textContent = t('getPro'); $('stup').onclick = openAccount; }
   }
 }
 function openModal(view) { $('modal').dataset.view = view; $('modal').classList.add('open'); }
@@ -745,7 +755,7 @@ function renderAccount() {
   if (a.admin_needs_password_change) {
     card = '<div class="card warn"><b>Bitte ändere dein Start-Passwort.</b><br>Du bist Admin, aber noch mit dem Start-Passwort angemeldet. Ändere es unten – dann werden Admin-Bereich und gratis Pro freigeschaltet.</div>';
   } else if (a.is_admin) {
-    card = '<div class="card"><b>✦ Pro (Admin)</b> – gratis und unbegrenzt mit Claude.</div>' +
+    card = '<div class="card"><b>✦ Pro (Admin)</b> – gratis und unbegrenzt.</div>' +
       '<button class="primary" data-act="admin" type="button">Admin-Bereich öffnen</button>';
   } else if (a.plan === 'pro') {
     const d = '<b>' + dateStr(a.pro_until) + '</b>';
@@ -759,15 +769,16 @@ function renderAccount() {
       (a.auto_renew ? '<button class="btn danger" data-act="cancel" type="button">' + t('cancelSub') + '</button>' : '') + '</div>';
   } else {
     const f = a.free;
-    const promo = a.promo ? '<div class="card promo">🎁 ' + t('promo', { name: esc(a.promo.name), d: a.promo.free_days, p: price }) + '</div>' : '';
+    const closed = !a.sales_open;
+    const promo = a.promo && !closed ? '<div class="card promo">🎁 ' + t('promo', { name: esc(a.promo.name), d: a.promo.free_days, p: price }) + '</div>' : '';
     const note = a.ended_reason === 'price_change' ? '<p class="muted">' + t('endedPrice', { p: price }) + '</p>' :
                  a.ended_reason === 'cancelled' ? '<p class="muted">' + t('endedOld') + '</p>' : '';
-    const off = a.payments === 'off';
+    const off = a.payments === 'off' || closed;
     card = promo + note + '<div class="plans">' +
-      '<div class="card"><h4>' + t('free') + '</h4><ul><li>Gemini</li><li>' + t('perDay', { l: tok(f.limit) }) + '</li><li>' + t('usedToday', { u: tok(f.used) }) + '</li></ul></div>' +
-      '<div class="card pro"><h4>✦ ' + t('pro') + '</h4><ul><li>' + t('claudeStronger') + '</li><li>' + t('unlimited') + '</li><li><b>' + t('perMonth', { p: price }) + '</b></li><li>' + t('cancelAny') + '</li></ul></div></div>' +
+      '<div class="card"><h4>' + t('free') + '</h4><ul><li>' + t('perDay', { l: tok(f.limit) }) + '</li><li>' + t('usedToday', { u: tok(f.used) }) + '</li></ul></div>' +
+      '<div class="card pro"><h4>✦ ' + t('pro') + '</h4><ul><li>' + t('strongerAI') + '</li><li>' + t('unlimited') + '</li><li><b>' + t('perMonth', { p: price }) + '</b></li><li>' + t('cancelAny') + '</li></ul></div></div>' +
       '<button class="primary" data-act="buy" type="button"' + (off ? ' disabled' : '') + '>' +
-      (off ? t('soon') : a.promo ? t('startFree', { d: a.promo.free_days }) : t('buy', { p: price })) + '</button>';
+      (closed ? t('e_sales_closed') : off ? t('soon') : a.promo ? t('startFree', { d: a.promo.free_days }) : t('buy', { p: price })) + '</button>';
   }
   $('mbody').innerHTML = '<h2>' + t('account') + '</h2><p class="muted">' + t('loggedAs', { n: '<b>' + esc(a.username) + '</b>' }) + '</p>' + card +
     '<p class="muted" style="margin-top:14px">' + t('chatsNote') + '</p>' +
@@ -829,6 +840,9 @@ async function openAdmin() {
     '<button class="btn" data-a="grant" data-id="' + u.id + '">+30 Tage</button> ' +
     (u.pro ? '<button class="btn danger" data-a="revoke" data-id="' + u.id + '">Entziehen</button>' : '')) + '</td></tr>').join('');
   $('mbody').innerHTML = '<h2>Admin-Bereich</h2><p class="muted">' + esc(modeTxt) + '</p>' +
+    '<h3>Verkauf</h3><div class="card"><b>' + (s.sales_open ? 'Verkauf ist offen' : 'Verkauf ist GESPERRT') + '</b><p class="muted">' +
+    (s.sales_open ? 'Jeder kann „Pro holen“.' : 'Niemand kann im Moment Pro kaufen. Laufende Abos und alle Pro-Nutzer sind nicht betroffen.') + '</p>' +
+    '<button class="' + (s.sales_open ? 'btn danger' : 'primary') + '" data-a="sales" data-open="' + (s.sales_open ? 0 : 1) + '">' + (s.sales_open ? 'Verkauf sperren' : 'Verkauf wieder öffnen') + '</button></div>' +
     '<h3>Preis</h3><div class="row2"><input id="aprice" type="number" min="0.5" step="0.5" value="' + (s.price_cents / 100) + '"> <span>' + esc(s.currency) + ' / Monat</span>' +
     '<button class="primary" data-a="price">Speichern</button></div>' +
     '<p class="muted">Bei einer Preisänderung enden alle laufenden Abos automatisch zum Ende des bezahlten Monats. Danach kann man zum neuen Preis wieder abonnieren.</p>' +
@@ -859,6 +873,7 @@ $('mbody').addEventListener('click', async e => {
     j = await adminPost('/api/admin/price', { price: p });
     if (j) toast('✓ Preis gespeichert' + (j.ended_subscriptions ? ' · ' + j.ended_subscriptions + ' Abos laufen aus' : '') + (j.stripe_failed ? ' · ⚠️ ' + j.stripe_failed + ' Stripe-Kündigungen fehlgeschlagen' : ''));
   }
+  else if (a === 'sales') { j = await adminPost('/api/admin/sales', { open: b.dataset.open === '1' }); if (j) toast(j.open ? '✓ Verkauf geöffnet' : '✓ Verkauf gesperrt'); }
   else if (a === 'limit') { j = await adminPost('/api/admin/free-limit', { tokens: parseInt($('alimit').value, 10) }); if (j) toast('✓ Limit gespeichert'); }
   else if (a === 'padd') { j = await adminPost('/api/admin/promos', { name: $('pname').value, free_days: parseInt($('pdays').value, 10), ends: $('pends').value || null }); if (j) toast('✓ Aktion angelegt'); }
   else if (a === 'ptoggle') j = await adminPost('/api/admin/promos/' + id + '/toggle');

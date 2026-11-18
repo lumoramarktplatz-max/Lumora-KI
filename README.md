@@ -18,7 +18,10 @@ Weltkugel-Symbol oben ändern. Die KI antwortet immer in der Sprache, in der du 
 | Limit | 30 000 Tokens/Tag (Admin ändert das) | unbegrenzt |
 | Preis | – | 5.00 CHF/Monat (Admin ändert das) |
 
-- Chats gehören dem Nutzer, nicht dem Plan: Man kann jeden Chat mit Gemini und mit Claude weiterführen.
+- In der Oberfläche heißen die Pläne nur **Gratis** und **Pro**, die Anbieter (Gemini/Claude) werden nicht genannt.
+- Pro-Nutzer können oben im Chat zwischen dem **Pro-Modell** und dem **normalen (Gratis-)Modell** umschalten; beides ohne Limit.
+- Chats gehören dem Nutzer, nicht dem Plan: Man kann jeden Chat mit beiden Modellen weiterführen.
+- **Verkauf sperren:** Im Admin-Bereich kann man neue Pro-Käufe sperren und wieder öffnen. Laufende Abos bleiben davon unberührt.
 - Kündigen ist jederzeit möglich, Pro läuft bis zum Ende des bezahlten Zeitraums.
 - **Admin** (`Matic`, Start-Passwort `VIP`): gratis Pro, Preis ändern (laufende Abos enden dann zum Monatsende),
   Aktionen wie „Erster Monat gratis“, Gratis-Limit, Pro vergeben/entziehen. Admin-Rechte gibt es erst,

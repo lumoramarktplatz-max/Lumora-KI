@@ -33,7 +33,9 @@ SYSTEM_PROMPT = (
     "Wichtig: Antworte immer in der Sprache, in der der Nutzer seine letzte Nachricht "
     "geschrieben hat (z. B. Englisch, Spanisch, Türkisch, Slowenisch …), und bleibe in "
     "dieser Sprache, bis der Nutzer die Sprache wechselt. Bei unklarer Sprache nimm Deutsch. "
-    "Wenn du etwas nicht weißt, sag es offen."
+    "Wenn du etwas nicht weißt, sag es offen. "
+    "Du bist Lumora. Welches Modell oder welcher Anbieter hinter dir steckt, nennst du nicht; "
+    "wenn jemand danach fragt, sagst du freundlich, dass du Lumora bist, eine KI."
 )
 
 SESSION_SECONDS = 30 * 24 * 3600
@@ -195,6 +197,7 @@ app = FastAPI(title="Lumora-KI")
 # ============================================================ Konto
 class SendRequest(BaseModel):
     content: str
+    model: str | None = None  # "pro" oder "free"; Pro-Nutzer dürfen wählen, alle anderen bekommen "free"
 
 
 class Credentials(BaseModel):
@@ -363,6 +366,7 @@ async def send_message(chat_id: int, req: SendRequest, user=Depends(current_user
         now = time.time()
         profile = billing.get_profile(con, uid, now)
         pro = billing.is_pro(profile, now)
+        use_pro = pro and req.model != "free"  # Pro-Nutzer können auch das normale Modell nutzen, ohne Limit
         if not pro:
             limit = billing.get_settings(con)["free_daily_tokens"]
             if billing.tokens_used(con, uid) >= limit:
@@ -382,7 +386,7 @@ async def send_message(chat_id: int, req: SendRequest, user=Depends(current_user
     history = [dict(r) for r in reversed(rows)]
     while history and history[0]["role"] != "user":
         history.pop(0)
-    generate = generate_claude if pro else generate_gemini
+    generate = generate_claude if use_pro else generate_gemini
 
     async def stream():
         answer, usage = "", {}
@@ -404,7 +408,8 @@ async def send_message(chat_id: int, req: SendRequest, user=Depends(current_user
                         (chat_id, answer, time.time()),
                     )
                     con.execute("UPDATE chats SET updated = ? WHERE id = ?", (time.time(), chat_id))
-                    billing.add_tokens(con, uid, used)
+                    if not pro:  # Limit gilt nur im Gratis-Plan
+                        billing.add_tokens(con, uid, used)
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")
@@ -426,6 +431,8 @@ async def subscribe(request: Request, user=Depends(current_user)):
         raise HTTPException(503, "pay_off")
     with db() as con:
         p = billing.get_profile(con, user["id"])
+        if not billing.get_settings(con)["sales_open"]:
+            raise HTTPException(403, "sales_closed")
         reason = billing.subscribe_block_reason(p)
         if reason:
             raise HTTPException(400, reason)
@@ -568,6 +575,18 @@ async def admin_price(req: PriceReq, admin=Depends(require_admin)):
         )
         failed = sum(1 for r in results if isinstance(r, Exception))
     return {"ok": True, "price_cents": cents, "ended_subscriptions": len(subs), "stripe_failed": failed}
+
+
+class SalesReq(BaseModel):
+    open: bool
+
+
+@app.post("/api/admin/sales")
+async def admin_sales(req: SalesReq, admin=Depends(require_admin)):
+    """Verkauf sperren/öffnen: neue Pro-Käufe sind gesperrt, bestehende Abos laufen normal weiter."""
+    with db() as con:
+        billing.set_setting(con, "sales_open", 1 if req.open else 0)
+    return {"ok": True, "open": req.open}
 
 
 @app.post("/api/admin/free-limit")

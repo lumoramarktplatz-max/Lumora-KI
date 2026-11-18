@@ -15,8 +15,8 @@ except Exception:  # tzdata fehlt -> UTC
     TZ = timezone.utc
 
 MONTH = 30 * 86400
-DEFAULTS = {"price_cents": 500, "currency": "CHF", "free_daily_tokens": 30000}
-INT_SETTINGS = {"price_cents", "free_daily_tokens"}
+DEFAULTS = {"price_cents": 500, "currency": "CHF", "free_daily_tokens": 30000, "sales_open": 1}
+INT_SETTINGS = {"price_cents", "free_daily_tokens", "sales_open"}
 STRIPE_API = "https://api.stripe.com/v1"
 STRIPE_TRANSPORT = None  # nur für Tests austauschbar
 APP_TAG = "lumora"  # Marker, damit Ereignisse anderer Websites im selben Stripe-Konto ignoriert werden
@@ -149,6 +149,7 @@ def account_info(con, user: dict, now: float | None = None) -> dict:
             "remaining": max(0, s["free_daily_tokens"] - used),
         },
         "payments": payments_mode(),
+        "sales_open": bool(s["sales_open"]),
         "can_portal": payments_mode() == "stripe" and bool(p["stripe_customer"]),
         "subscribe_block": subscribe_block_reason(p, now),
     }
