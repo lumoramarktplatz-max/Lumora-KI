@@ -218,21 +218,10 @@ try{var p=localStorage.getItem('lumora-theme')||'auto';document.documentElement.
   #status .fill.warn { background:linear-gradient(90deg,#f59e0b,#ef4444); }
   #status button { background:none; border:0; color:var(--link); font:inherit; font-size:12px; font-weight:700; cursor:pointer; padding:0; }
   #status button:hover { text-decoration:underline; }
-  .mswitch { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; margin-inline-start:6px; }
-  .mswitch button { background:none; border:0; color:var(--muted); font:inherit; font-size:12px; font-weight:700; padding:3px 12px; cursor:pointer; text-decoration:none !important; }
-  .mswitch button.on { background:var(--grad); color:#fff; }
-  .badge { display:inline-block; min-width:18px; height:18px; border-radius:9px; background:#ef4444; color:#fff; font-size:11px; font-weight:700; text-align:center; line-height:18px; margin-inline-start:6px; padding:0 5px; }
-  .plan { position:relative; }
-  .plan[data-dot="1"]::after { content:''; position:absolute; top:-2px; inset-inline-end:-2px; width:10px; height:10px; border-radius:50%; background:#ef4444; border:2px solid var(--bg); }
-  .sbox { max-height:42vh; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin:12px 0; padding:2px; }
-  .sm { max-width:88%; padding:8px 12px; border-radius:14px; background:var(--glass); border:1px solid var(--line); white-space:pre-wrap; overflow-wrap:anywhere; font-size:14px; }
-  .sm.me { align-self:flex-end; background:var(--ubub); color:#fff; border-color:transparent; }
-  .sm small { display:block; opacity:.7; font-size:11px; margin-bottom:2px; }
-  .sform { display:flex; gap:8px; align-items:flex-end; }
-  .sform textarea { flex:1; background:var(--inp); color:var(--text); border:1px solid var(--line); border-radius:12px; padding:10px 12px; font:inherit; resize:vertical; min-height:44px; outline:none; }
-  .sform textarea:focus { border-color:var(--a); box-shadow:0 0 0 3px var(--ring); }
-  .thread { display:block; width:100%; text-align:start; background:var(--glass); border:1px solid var(--line); color:var(--text); border-radius:12px; padding:10px 12px; margin:6px 0; font:inherit; cursor:pointer; }
-  .thread:hover { border-color:var(--a); } .thread small { color:var(--muted); display:block; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #status .mswitch { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; margin-inline-start:8px; background:var(--glass); }
+  #status .mswitch button { background:none; border:0; color:var(--muted); font:inherit; font-size:13px; font-weight:700; padding:5px 16px; cursor:pointer; text-decoration:none; transition:.2s; }
+  #status .mswitch button:hover { color:var(--text); text-decoration:none; }
+  #status .mswitch button.on { background:var(--grad); color:#fff; box-shadow:0 2px 10px var(--pshadow); }
   .modal { position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; padding:16px; background:rgba(0,0,0,.55); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
   .modal.open { display:flex; }
   .sheet { position:relative; width:min(600px,100%); max-height:92dvh; overflow:auto; background:var(--sidem); color:var(--text); border:1px solid var(--line); border-radius:24px; padding:26px 24px; box-shadow:0 30px 80px var(--shadow); animation:pop .3s both; }
