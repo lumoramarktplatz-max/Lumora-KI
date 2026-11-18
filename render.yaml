@@ -20,7 +20,7 @@ services:
       - key: LUMORA_PRO_MODEL
         value: claude-sonnet-5-5   # Pro-Plan: Claude
       - key: PAYMENTS_MODE
-        value: "off"         # off = keine Bezahlung | test = simuliert | stripe = echt
+        sync: false          # im Render-Dashboard setzen: off = keine Bezahlung | test = simuliert | stripe = echt
       - key: ADMIN_PASSWORD
         sync: false          # optional: Start-Passwort für den Admin "Matic" (sonst VIP)
       - key: STRIPE_SECRET_KEY
