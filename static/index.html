@@ -903,7 +903,8 @@ async function openAdmin() {
     (j.db.persistent ? '<p class="muted">✓ Daten werden dauerhaft gespeichert' + (j.db.postgres ? ' (Postgres)' : '') + '. Updates löschen nichts.</p>' :
       '<div class="card warn"><b>⚠️ ACHTUNG: Die Datenbank ist NICHT dauerhaft!</b><br>Konten, Chats und Abos gehen bei jedem Update verloren. Trage auf Render <code>DATABASE_URL</code> (Neon) ein.</div>') +
     '<div class="row2"><button class="btn" data-a="support" type="button">📬 Support-Postfach' + (SUP.admin_unread ? '<span class="badge">' + SUP.admin_unread + '</span>' : '') + '</button>' +
-    '<button class="btn" data-a="export" type="button">⬇ Abo-Liste herunterladen</button></div>' +
+    '<button class="btn" data-a="export" type="button">⬇ Abo-Liste herunterladen</button>' +
+    '<button class="btn" data-a="testpro" type="button">🔌 Pro-Verbindung testen</button></div><div id="testres"></div>' +
     '<h3>Verkauf</h3><div class="card"><b>' + (s.sales_open ? 'Verkauf ist offen' : 'Verkauf ist GESPERRT') + '</b><p class="muted">' +
     (s.sales_open ? 'Jeder kann „Pro holen“.' : 'Niemand kann im Moment Pro kaufen. Laufende Abos und alle Pro-Nutzer sind nicht betroffen.') + '</p>' +
     '<button class="' + (s.sales_open ? 'btn danger' : 'primary') + '" data-a="sales" data-open="' + (s.sales_open ? 0 : 1) + '">' + (s.sales_open ? 'Verkauf sperren' : 'Verkauf wieder öffnen') + '</button></div>' +
@@ -966,6 +967,21 @@ $('mbody').addEventListener('click', async e => {
   if (a === 'support' || a === 'sback') { openAdminSupport(); return; }
   if (a === 'sadmin') { openAdmin(); return; }
   if (a === 'sthread') { openAdminThread(id); return; }
+  if (a === 'testpro') {
+    const box = $('testres'); box.innerHTML = '<div class="card"><p class="muted">Teste die Verbindung zu Claude …</p></div>';
+    b.disabled = true;
+    const r = await fetch('/api/admin/test-pro', { method: 'POST' }); const j = await r.json().catch(() => ({}));
+    b.disabled = false;
+    if (!r.ok) { box.innerHTML = '<div class="card warn">' + esc(errText(j.detail)) + '</div>'; return; }
+    const L = (ok, txt) => '<div>' + (ok ? '✅ ' : '❌ ') + esc(txt) + '</div>';
+    box.innerHTML = '<div class="card' + (j.ok ? '' : ' warn') + '"><b>' + (j.ok ? 'Pro funktioniert!' : 'Pro funktioniert nicht') + '</b>' +
+      L(j.key_set, j.key_set ? 'Schlüssel ist gesetzt (' + j.key_length + ' Zeichen)' : 'Kein Schlüssel gesetzt') +
+      (j.key_set ? L(j.key_prefix_ok, 'Schlüssel beginnt mit sk-ant-') + L(j.key_ascii, 'Nur normale Zeichen im Schlüssel') +
+        (j.had_whitespace ? '<div>ℹ️ Im Schlüssel waren Leerzeichen/Zeilenumbrüche. Lumora entfernt sie automatisch.</div>' : '') : '') +
+      (j.ok ? L(true, 'Antwort von ' + j.model + ': „' + j.reply + '“') : (j.error ? L(false, j.error) : '')) +
+      (j.hint ? '<p><b>' + esc(j.hint) + '</b></p>' : '') + '</div>';
+    return;
+  }
   if (a === 'export') {
     const r = await fetch('/api/admin/export'); if (!r.ok) { toast('⚠️ Fehler'); return; }
     const url = URL.createObjectURL(await r.blob()); const l = document.createElement('a');

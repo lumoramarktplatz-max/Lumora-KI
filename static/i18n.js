@@ -100,6 +100,7 @@ de: {
   supportEmpty: 'Noch keine Nachrichten.',
   supportName: 'Support',
   e_support_rate: 'Zu viele Nachrichten in kurzer Zeit. Bitte warte etwas.',
+  e_ai_unavailable: 'Der Pro-Dienst ist gerade nicht erreichbar. Bitte versuche es später noch einmal.',
 },
 en: {
   welcome: 'Welcome back',
@@ -195,6 +196,7 @@ en: {
   supportEmpty: 'No messages yet.',
   supportName: 'Support',
   e_support_rate: 'Too many messages in a short time. Please wait a little.',
+  e_ai_unavailable: 'The Pro service is not reachable right now. Please try again later.',
 },
 fr: {
   welcome: 'Bon retour',
@@ -290,6 +292,7 @@ fr: {
   supportEmpty: 'Aucun message pour le moment.',
   supportName: 'Support',
   e_support_rate: 'Trop de messages en peu de temps. Merci de patienter un peu.',
+  e_ai_unavailable: 'Le service Pro n\'est pas joignable pour le moment. Réessaie plus tard.',
 },
 es: {
   welcome: 'Bienvenido de nuevo',
@@ -385,6 +388,7 @@ es: {
   supportEmpty: 'Aún no hay mensajes.',
   supportName: 'Soporte',
   e_support_rate: 'Demasiados mensajes en poco tiempo. Espera un poco.',
+  e_ai_unavailable: 'El servicio Pro no está disponible en este momento. Inténtalo de nuevo más tarde.',
 },
 it: {
   welcome: 'Bentornato',
@@ -480,6 +484,7 @@ it: {
   supportEmpty: 'Ancora nessun messaggio.',
   supportName: 'Supporto',
   e_support_rate: 'Troppi messaggi in poco tempo. Attendi un momento.',
+  e_ai_unavailable: 'Il servizio Pro al momento non è raggiungibile. Riprova più tardi.',
 },
 pt: {
   welcome: 'Bem-vindo de volta',
@@ -575,6 +580,7 @@ pt: {
   supportEmpty: 'Ainda não há mensagens.',
   supportName: 'Suporte',
   e_support_rate: 'Demasiadas mensagens em pouco tempo. Aguarda um pouco.',
+  e_ai_unavailable: 'O serviço Pro não está acessível neste momento. Tenta novamente mais tarde.',
 },
 nl: {
   welcome: 'Welkom terug',
@@ -670,6 +676,7 @@ nl: {
   supportEmpty: 'Nog geen berichten.',
   supportName: 'Support',
   e_support_rate: 'Te veel berichten in korte tijd. Wacht even.',
+  e_ai_unavailable: 'De Pro-dienst is op dit moment niet bereikbaar. Probeer het later opnieuw.',
 },
 da: {
   welcome: 'Velkommen tilbage',
@@ -765,6 +772,7 @@ da: {
   supportEmpty: 'Ingen beskeder endnu.',
   supportName: 'Support',
   e_support_rate: 'For mange beskeder på kort tid. Vent lidt.',
+  e_ai_unavailable: 'Pro-tjenesten kan ikke nås lige nu. Prøv igen senere.',
 },
 sl: {
   welcome: 'Dobrodošli nazaj',
@@ -860,6 +868,7 @@ sl: {
   supportEmpty: 'Še ni sporočil.',
   supportName: 'Podpora',
   e_support_rate: 'Preveč sporočil v kratkem času. Prosim, počakaj malo.',
+  e_ai_unavailable: 'Storitev Pro trenutno ni dosegljiva. Poskusi znova pozneje.',
 },
 sv: {
   welcome: 'Välkommen tillbaka',
@@ -955,6 +964,7 @@ sv: {
   supportEmpty: 'Inga meddelanden än.',
   supportName: 'Support',
   e_support_rate: 'För många meddelanden på kort tid. Vänta lite.',
+  e_ai_unavailable: 'Pro-tjänsten kan inte nås just nu. Försök igen senare.',
 },
 nb: {
   welcome: 'Velkommen tilbake',
@@ -1050,6 +1060,7 @@ nb: {
   supportEmpty: 'Ingen meldinger ennå.',
   supportName: 'Kundestøtte',
   e_support_rate: 'For mange meldinger på kort tid. Vent litt.',
+  e_ai_unavailable: 'Pro-tjenesten er ikke tilgjengelig akkurat nå. Prøv igjen senere.',
 },
 fi: {
   welcome: 'Tervetuloa takaisin',
@@ -1145,6 +1156,7 @@ fi: {
   supportEmpty: 'Ei vielä viestejä.',
   supportName: 'Tuki',
   e_support_rate: 'Liian monta viestiä lyhyessä ajassa. Odota hetki.',
+  e_ai_unavailable: 'Pro-palvelu ei ole juuri nyt tavoitettavissa. Yritä myöhemmin uudelleen.',
 },
 pl: {
   welcome: 'Witaj ponownie',
@@ -1240,6 +1252,7 @@ pl: {
   supportEmpty: 'Brak wiadomości.',
   supportName: 'Pomoc',
   e_support_rate: 'Zbyt wiele wiadomości w krótkim czasie. Poczekaj chwilę.',
+  e_ai_unavailable: 'Usługa Pro jest teraz niedostępna. Spróbuj ponownie później.',
 },
 cs: {
   welcome: 'Vítej zpět',
@@ -1335,6 +1348,7 @@ cs: {
   supportEmpty: 'Zatím žádné zprávy.',
   supportName: 'Podpora',
   e_support_rate: 'Příliš mnoho zpráv za krátkou dobu. Chvíli počkej.',
+  e_ai_unavailable: 'Služba Pro je momentálně nedostupná. Zkus to prosím později.',
 },
 hr: {
   welcome: 'Dobrodošao natrag',
@@ -1430,6 +1444,7 @@ hr: {
   supportEmpty: 'Još nema poruka.',
   supportName: 'Podrška',
   e_support_rate: 'Previše poruka u kratkom vremenu. Pričekaj malo.',
+  e_ai_unavailable: 'Usluga Pro trenutačno nije dostupna. Pokušaj ponovno kasnije.',
 },
 hu: {
   welcome: 'Üdv újra',
@@ -1525,6 +1540,7 @@ hu: {
   supportEmpty: 'Még nincsenek üzenetek.',
   supportName: 'Ügyfélszolgálat',
   e_support_rate: 'Túl sok üzenet rövid időn belül. Kérlek, várj egy kicsit.',
+  e_ai_unavailable: 'A Pro szolgáltatás jelenleg nem érhető el. Kérlek, próbáld újra később.',
 },
 tr: {
   welcome: 'Tekrar hoş geldin',
@@ -1620,6 +1636,7 @@ tr: {
   supportEmpty: 'Henüz mesaj yok.',
   supportName: 'Destek',
   e_support_rate: 'Kısa sürede çok fazla mesaj. Lütfen biraz bekle.',
+  e_ai_unavailable: 'Pro hizmetine şu anda ulaşılamıyor. Lütfen daha sonra tekrar dene.',
 },
 ru: {
   welcome: 'С возвращением',
@@ -1715,6 +1732,7 @@ ru: {
   supportEmpty: 'Пока нет сообщений.',
   supportName: 'Поддержка',
   e_support_rate: 'Слишком много сообщений за короткое время. Подожди немного.',
+  e_ai_unavailable: 'Сервис Pro сейчас недоступен. Попробуй ещё раз позже.',
 },
 uk: {
   welcome: 'З поверненням',
@@ -1810,6 +1828,7 @@ uk: {
   supportEmpty: 'Повідомлень ще немає.',
   supportName: 'Підтримка',
   e_support_rate: 'Забагато повідомлень за короткий час. Зачекай трохи.',
+  e_ai_unavailable: 'Сервіс Pro зараз недоступний. Спробуй ще раз пізніше.',
 },
 ar: {
   welcome: 'مرحبًا بعودتك',
@@ -1905,6 +1924,7 @@ ar: {
   supportEmpty: 'لا توجد رسائل بعد.',
   supportName: 'الدعم',
   e_support_rate: 'رسائل كثيرة في وقت قصير. يرجى الانتظار قليلًا.',
+  e_ai_unavailable: 'خدمة برو غير متاحة حاليًا. يرجى المحاولة لاحقًا.',
 },
 ja: {
   welcome: 'おかえりなさい',
@@ -2000,6 +2020,7 @@ ja: {
   supportEmpty: 'まだメッセージはありません。',
   supportName: 'サポート',
   e_support_rate: '短時間にメッセージが多すぎます。しばらくお待ちください。',
+  e_ai_unavailable: 'Proサービスに現在接続できません。しばらくしてからもう一度お試しください。',
 },
 zh: {
   welcome: '欢迎回来',
@@ -2095,5 +2116,6 @@ zh: {
   supportEmpty: '暂无消息。',
   supportName: '客服',
   e_support_rate: '短时间内消息过多,请稍等片刻。',
+  e_ai_unavailable: 'Pro 服务暂时无法连接,请稍后再试。',
 },
 };

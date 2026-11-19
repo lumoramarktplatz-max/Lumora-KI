@@ -11,7 +11,7 @@ import time
 from datetime import datetime
 
 import httpx
-from anthropic import AsyncAnthropic
+from anthropic import AnthropicError, AsyncAnthropic
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -141,26 +141,46 @@ class UserError(Exception):
         self.code = code
 
 
-client = None  # Claude-Client, wird erst bei Bedarf erstellt (liest ANTHROPIC_API_KEY)
+client = None  # Claude-Client, wird erst bei Bedarf erstellt
+client_key = None
 GEMINI_TRANSPORT = None  # nur für Tests austauschbar
 
 
-async def generate_claude(history, usage):
-    global client
-    if not os.getenv("ANTHROPIC_API_KEY"):
+def anthropic_key() -> str:
+    """Claude-Schlüssel aus der Umgebung, ohne unsichtbare Leerzeichen/Zeilenumbrüche (passiert beim Einfügen leicht)."""
+    return "".join((os.getenv("ANTHROPIC_API_KEY") or "").split())
+
+
+def claude_client():
+    global client, client_key
+    key = anthropic_key()
+    if not key:
         raise UserError("pro_not_configured")
-    if client is None:
-        client = AsyncAnthropic()
-    async with client.messages.stream(
-        model=PRO_MODEL, max_tokens=4096, system=SYSTEM_PROMPT, messages=history
-    ) as s:
-        async for chunk in s.text_stream:
-            yield chunk
-        try:
-            final = await s.get_final_message()
-            usage["tokens"] = final.usage.input_tokens + final.usage.output_tokens
-        except Exception:
-            pass
+    if client is None or client_key != key:
+        client, client_key = AsyncAnthropic(api_key=key), key
+    return client
+
+
+def log_claude_error(e: Exception):
+    print(f"Claude-Fehler: {type(e).__name__}: {str(e)[:300]} | Ursache: {e.__cause__!r}"[:600], file=sys.stderr, flush=True)
+
+
+async def generate_claude(history, usage):
+    c = claude_client()
+    try:
+        async with c.messages.stream(
+            model=PRO_MODEL, max_tokens=4096, system=SYSTEM_PROMPT, messages=history
+        ) as s:
+            async for chunk in s.text_stream:
+                yield chunk
+            try:
+                final = await s.get_final_message()
+                usage["tokens"] = final.usage.input_tokens + final.usage.output_tokens
+            except Exception:
+                pass
+    except AnthropicError as e:  # Verbindung, Schlüssel, Guthaben, Überlastung …: Nutzer bekommt eine verständliche Meldung
+        log_claude_error(e)
+        raise UserError("ai_unavailable")
 
 
 async def generate_gemini(history, usage):
@@ -709,6 +729,42 @@ async def admin_price(req: PriceReq, admin=Depends(require_admin)):
 
 class SalesReq(BaseModel):
     open: bool
+
+
+@app.post("/api/admin/test-pro")
+async def admin_test_pro(admin=Depends(require_admin)):
+    """Prüft den Claude-Schlüssel und die Verbindung und sagt, was nicht stimmt (ohne den Schlüssel zu zeigen)."""
+    raw = os.getenv("ANTHROPIC_API_KEY") or ""
+    key = anthropic_key()
+    info = {
+        "model": PRO_MODEL, "key_set": bool(key), "key_length": len(key),
+        "key_prefix_ok": key.startswith("sk-ant-"), "had_whitespace": raw != key,
+        "key_ascii": key.isascii(), "ok": False, "error": "", "reply": "",
+    }
+    if not key:
+        info["error"] = "Kein Schlüssel gesetzt (ANTHROPIC_API_KEY fehlt auf Render)."
+        return info
+    try:
+        r = await claude_client().messages.create(
+            model=PRO_MODEL, max_tokens=20, messages=[{"role": "user", "content": "Antworte nur mit: ok"}], timeout=30
+        )
+        info["ok"] = True
+        info["reply"] = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")[:60]
+    except AnthropicError as e:
+        log_claude_error(e)
+        status = getattr(e, "status_code", None)
+        hint = {
+            401: "Der Schlüssel wird abgelehnt (falsch, abgeschnitten oder widerrufen).",
+            403: "Der Schlüssel darf dieses Modell nicht benutzen.",
+            404: "Das Modell wurde nicht gefunden (LUMORA_PRO_MODEL prüfen).",
+            429: "Zu viele Anfragen oder Ausgabenlimit erreicht.",
+        }.get(status, "")
+        if status == 400 and "credit" in str(e).lower():
+            hint = "Das Guthaben ist aufgebraucht oder fehlt (console.anthropic.com → Abrechnung)."
+        cause = repr(e.__cause__)[:160] if e.__cause__ else ""
+        info["error"] = f"{type(e).__name__}{f' {status}' if status else ''}: {str(e)[:220]}" + (f" | Ursache: {cause}" if cause else "")
+        info["hint"] = hint
+    return info
 
 
 @app.post("/api/admin/sales")
