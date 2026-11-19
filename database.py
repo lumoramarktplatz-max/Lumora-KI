@@ -1,4 +1,5 @@
 """Datenbank-Schicht: SQLite-Datei (lokal) oder Postgres (wenn DATABASE_URL gesetzt ist)."""
+import atexit
 import os
 import sqlite3
 
@@ -8,8 +9,24 @@ PG = bool(DATABASE_URL)
 if PG:
     import psycopg
     from psycopg.rows import dict_row
+    from psycopg_pool import ConnectionPool
 
     UNIQUE_ERRORS = (psycopg.errors.UniqueViolation,)
+    # Verbindungen wiederverwenden: eine neue Verbindung zu Neon kostet (TLS + Anmeldung, evtl. Aufwachen) oft
+    # 1 Sekunde oder mehr. Ob eine ausgeliehene Verbindung noch lebt, prüft Conn selbst (Neon schließt ungenutzte
+    # Verbindungen); die eingebaute Prüfung wartet bei vielen toten Verbindungen zu lange.
+    # prepare_threshold=None: nötig für den Neon-Pooler (pgbouncer).
+    POOL = ConnectionPool(
+        DATABASE_URL,
+        min_size=1,
+        max_size=int(os.getenv("DB_POOL_MAX", "10")),
+        max_idle=60,
+        timeout=20,
+        kwargs={"row_factory": dict_row, "prepare_threshold": None, "connect_timeout": 10},
+        open=False,
+    )
+    POOL.open()  # wartet nicht: der Dienst startet sofort, Verbindungen entstehen im Hintergrund
+    atexit.register(lambda: POOL.close(timeout=2))  # sauber aufräumen, sonst dauert das Beenden ~15 s
 else:
     UNIQUE_ERRORS = (sqlite3.IntegrityError,)
 
@@ -19,7 +36,18 @@ class Conn:
 
     def __init__(self):
         if PG:
-            self.c = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+            last = None
+            for _ in range(POOL.max_size + 2):
+                c = POOL.getconn()
+                try:
+                    c.execute("SELECT 1")  # lebt die Verbindung noch? (Teil der späteren Transaktion)
+                    self.c = c
+                    break
+                except psycopg.OperationalError as e:
+                    last = e
+                    POOL.putconn(c)  # kaputt: der Pool verwirft sie und legt Ersatz an
+            else:
+                raise last
         else:
             self.c = sqlite3.connect(DB_PATH)
             self.c.row_factory = sqlite3.Row
@@ -41,11 +69,20 @@ class Conn:
         try:
             self.c.rollback() if et else self.c.commit()
         finally:
-            self.c.close()
+            if PG:
+                POOL.putconn(self.c)
+            else:
+                self.c.close()
 
 
 def db():
     return Conn()
+
+
+def close_pool():
+    """Beim Herunterfahren des Servers (Neustart/Deploy) alle Verbindungen sauber schließen."""
+    if PG:
+        POOL.close(timeout=2)
 
 
 SCHEMA = [

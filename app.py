@@ -8,6 +8,7 @@ import re
 import secrets
 import sys
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 import httpx
@@ -15,13 +16,14 @@ from anthropic import AnthropicError, AsyncAnthropic
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from starlette.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 load_dotenv()
 
 import billing  # noqa: E402  (nach load_dotenv, weil dort Umgebungsvariablen gelesen werden)
-from database import PG, UNIQUE_ERRORS, db, init_db  # noqa: E402
+from database import PG, UNIQUE_ERRORS, close_pool, db, init_db  # noqa: E402
 
 GEMINI_KEY = os.getenv("GEMINI_API_KEY")
 # Gratis-Plan -> Gemini, Pro-Plan -> Claude
@@ -216,7 +218,13 @@ async def generate_gemini(history, usage):
                             yield part["text"]
 
 
-app = FastAPI(title="Lumora-KI")
+@asynccontextmanager
+async def lifespan(_app):
+    yield
+    close_pool()
+
+
+app = FastAPI(title="Lumora-KI", lifespan=lifespan)
 
 
 # ============================================================ Konto
@@ -240,7 +248,7 @@ DUMMY_SALT = b"\0" * 16
 
 
 @app.post("/api/register")
-async def register(creds: Credentials, response: Response):
+def register(creds: Credentials, response: Response):
     if not USERNAME_RE.match(creds.username):
         raise HTTPException(400, "bad_username")
     if not 8 <= len(creds.password) <= 200:
@@ -259,7 +267,7 @@ async def register(creds: Credentials, response: Response):
 
 
 @app.post("/api/login")
-async def login(creds: Credentials, response: Response):
+def login(creds: Credentials, response: Response):
     name = creds.username.strip().lower()[:64]
     now = time.time()
     with db() as con:
@@ -290,7 +298,7 @@ async def login(creds: Credentials, response: Response):
 
 
 @app.post("/api/logout")
-async def logout(request: Request, response: Response):
+def logout(request: Request, response: Response):
     token = request.cookies.get(COOKIE)
     if token:
         with db() as con:
@@ -300,13 +308,13 @@ async def logout(request: Request, response: Response):
 
 
 @app.get("/api/me")
-async def me(user=Depends(current_user)):
+def me(user=Depends(current_user)):
     with db() as con:
         return billing.account_info(con, user)
 
 
 @app.post("/api/password")
-async def change_password(req: PasswordChange, request: Request, user=Depends(current_user)):
+def change_password(req: PasswordChange, request: Request, user=Depends(current_user)):
     if not 8 <= len(req.new) <= 200:
         raise HTTPException(400, "pw_short")
     if req.new == req.old or req.new == DEFAULT_ADMIN_PW:
@@ -340,7 +348,7 @@ def owned_chat(con, chat_id: int, user_id: int):
 
 
 @app.get("/api/chats")
-async def list_chats(user=Depends(current_user)):
+def list_chats(user=Depends(current_user)):
     with db() as con:
         rows = con.execute(
             "SELECT id, title FROM chats WHERE user_id = ? ORDER BY updated DESC, id DESC",
@@ -350,7 +358,7 @@ async def list_chats(user=Depends(current_user)):
 
 
 @app.post("/api/chats")
-async def create_chat(user=Depends(current_user)):
+def create_chat(user=Depends(current_user)):
     now = time.time()
     with db() as con:
         new_id = con.insert(
@@ -361,7 +369,7 @@ async def create_chat(user=Depends(current_user)):
 
 
 @app.get("/api/chats/{chat_id}")
-async def get_chat(chat_id: int, user=Depends(current_user)):
+def get_chat(chat_id: int, user=Depends(current_user)):
     with db() as con:
         chat = owned_chat(con, chat_id, user["id"])
         msgs = con.execute(
@@ -371,15 +379,26 @@ async def get_chat(chat_id: int, user=Depends(current_user)):
 
 
 @app.delete("/api/chats/{chat_id}")
-async def delete_chat(chat_id: int, user=Depends(current_user)):
+def delete_chat(chat_id: int, user=Depends(current_user)):
     with db() as con:
         owned_chat(con, chat_id, user["id"])
         con.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
     return {"ok": True}
 
 
+def save_answer(chat_id: int, uid: int, answer: str, used: int, pro: bool):
+    with db() as con:
+        con.execute(
+            "INSERT INTO messages (chat_id, role, content, created) VALUES (?, 'assistant', ?, ?)",
+            (chat_id, answer, time.time()),
+        )
+        con.execute("UPDATE chats SET updated = ? WHERE id = ?", (time.time(), chat_id))
+        if not pro:  # Limit gilt nur im Gratis-Plan
+            billing.add_tokens(con, uid, used)
+
+
 @app.post("/api/chats/{chat_id}/messages")
-async def send_message(chat_id: int, req: SendRequest, user=Depends(current_user)):
+def send_message(chat_id: int, req: SendRequest, user=Depends(current_user)):
     text = req.content.strip()
     if not text:
         raise HTTPException(400, "msg_empty")
@@ -426,21 +445,21 @@ async def send_message(chat_id: int, req: SendRequest, user=Depends(current_user
         finally:
             if answer:
                 used = usage.get("tokens") or (sum(len(m["content"]) for m in history) + len(answer)) // 3
-                with db() as con:
-                    con.execute(
-                        "INSERT INTO messages (chat_id, role, content, created) "
-                        "VALUES (?, 'assistant', ?, ?)",
-                        (chat_id, answer, time.time()),
-                    )
-                    con.execute("UPDATE chats SET updated = ? WHERE id = ?", (time.time(), chat_id))
-                    if not pro:  # Limit gilt nur im Gratis-Plan
-                        billing.add_tokens(con, uid, used)
+                await run_in_threadpool(save_answer, chat_id, uid, answer, used, pro)
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")
 
 
 # ============================================================ Abo
+async def in_db(fn, *args):
+    """Führt fn(con, *args) mit einer Datenbankverbindung in einem Thread aus."""
+    def run():
+        with db() as con:
+            return fn(con, *args)
+    return await run_in_threadpool(run)
+
+
 def public_base(request: Request) -> str:
     return (os.getenv("PUBLIC_URL") or str(request.base_url)).rstrip("/")
 
@@ -454,7 +473,7 @@ async def subscribe(request: Request, user=Depends(current_user)):
     mode = billing.payments_mode()
     if mode == "off":
         raise HTTPException(503, "pay_off")
-    with db() as con:
+    def prepare(con):
         p = billing.get_profile(con, user["id"])
         if not billing.get_settings(con)["sales_open"]:
             raise HTTPException(403, "sales_closed")
@@ -465,7 +484,13 @@ async def subscribe(request: Request, user=Depends(current_user)):
         promo = billing.eligible_promo(con, p)
         if mode == "test":
             billing.activate_test(con, user["id"])
-            return {"ok": True}
+            return None
+        return s, promo
+
+    prep = await in_db(prepare)
+    if prep is None:
+        return {"ok": True}
+    s, promo = prep
     try:
         url = await billing.stripe_checkout(
             user, s["price_cents"], s["currency"], promo["free_days"] if promo else 0, public_base(request), lang
@@ -477,18 +502,19 @@ async def subscribe(request: Request, user=Depends(current_user)):
 
 @app.post("/api/subscription/cancel")
 async def cancel_subscription(user=Depends(current_user)):
-    with db() as con:
+    def check(con):
         p = billing.get_profile(con, user["id"])
         if not (p["auto_renew"] and p["pro_until"] > time.time()):
             raise HTTPException(400, "no_sub")
-        sub = p["stripe_sub"]
+        return p["stripe_sub"]
+
+    sub = await in_db(check)
     if sub and billing.payments_mode() == "stripe":
         try:
             await billing.stripe_cancel_at_period_end(sub)
         except Exception as e:
             raise HTTPException(502, str(e))
-    with db() as con:
-        billing.cancel_local(con, user["id"])
+    await in_db(billing.cancel_local, user["id"])
     return {"ok": True}
 
 
@@ -496,8 +522,7 @@ async def cancel_subscription(user=Depends(current_user)):
 async def subscription_portal(request: Request, user=Depends(current_user)):
     if billing.payments_mode() != "stripe":
         raise HTTPException(503, "pay_off")
-    with db() as con:
-        p = billing.get_profile(con, user["id"])
+    p = await in_db(billing.get_profile, user["id"])
     if not p["stripe_customer"]:
         raise HTTPException(400, "no_sub")
     try:
@@ -515,8 +540,7 @@ async def stripe_webhook(request: Request):
     event = json.loads(payload)
     typ, obj = event.get("type", ""), (event.get("data") or {}).get("object") or {}
     if typ.startswith("customer.subscription.") and obj.get("id"):
-        with db() as con:
-            ours = billing.is_ours(con, obj)
+        ours = await in_db(billing.is_ours, obj)
         if not ours:  # Abo einer anderen Website im selben Stripe-Konto
             return {"received": True, "ignored": True}
         # Stripe liefert Ereignisse nicht immer in der richtigen Reihenfolge: lieber den aktuellen Stand holen.
@@ -530,8 +554,7 @@ async def stripe_webhook(request: Request):
         if typ == "customer.subscription.created":
             meta = obj.get("metadata") or {}
             uid = int(meta["user_id"]) if meta.get("app") == billing.APP_TAG and str(meta.get("user_id", "")).isdigit() else 0
-            with db() as con:
-                p = billing.get_profile(con, uid) if uid else None
+            p = await in_db(billing.get_profile, uid) if uid else None
             if p and p["stripe_sub"] and p["stripe_sub"] != obj["id"] and p["auto_renew"] and p["pro_until"] > time.time():
                 # Doppeltes Abo (z. B. zweimal bezahlt): das neue sofort beenden, damit nicht doppelt abgebucht wird
                 try:
@@ -539,8 +562,7 @@ async def stripe_webhook(request: Request):
                 except Exception:
                     pass
                 return {"received": True, "duplicate_cancelled": obj["id"]}
-    with db() as con:
-        billing.handle_event(con, event)
+    await in_db(billing.handle_event, event)
     return {"received": True}
 
 
@@ -553,7 +575,7 @@ class SupportMsg(BaseModel):
 
 
 @app.get("/api/support")
-async def support_thread(user=Depends(current_user)):
+def support_thread(user=Depends(current_user)):
     with db() as con:
         rows = con.execute(
             "SELECT id, sender, body, created FROM support_messages WHERE user_id = ? ORDER BY id DESC LIMIT 200",
@@ -566,7 +588,7 @@ async def support_thread(user=Depends(current_user)):
 
 
 @app.post("/api/support")
-async def support_send(req: SupportMsg, user=Depends(current_user)):
+def support_send(req: SupportMsg, user=Depends(current_user)):
     body = req.body.strip()
     if not body:
         raise HTTPException(400, "msg_empty")
@@ -588,7 +610,7 @@ async def support_send(req: SupportMsg, user=Depends(current_user)):
 
 
 @app.get("/api/support/unread")
-async def support_unread(user=Depends(current_user)):
+def support_unread(user=Depends(current_user)):
     with db() as con:
         mine = con.execute(
             "SELECT COUNT(*) AS n FROM support_messages WHERE user_id = ? AND sender = 'admin' AND seen = 0",
@@ -603,7 +625,7 @@ async def support_unread(user=Depends(current_user)):
 
 
 @app.get("/api/admin/support")
-async def admin_support_list(admin=Depends(require_admin)):
+def admin_support_list(admin=Depends(require_admin)):
     now = time.time()
     with db() as con:
         rows = con.execute(
@@ -623,7 +645,7 @@ async def admin_support_list(admin=Depends(require_admin)):
 
 
 @app.get("/api/admin/support/{uid}")
-async def admin_support_thread(uid: int, admin=Depends(require_admin)):
+def admin_support_thread(uid: int, admin=Depends(require_admin)):
     now = time.time()
     with db() as con:
         u = con.execute("SELECT id, username FROM users WHERE id = ?", (uid,)).fetchone()
@@ -639,7 +661,7 @@ async def admin_support_thread(uid: int, admin=Depends(require_admin)):
 
 
 @app.post("/api/admin/support/{uid}")
-async def admin_support_reply(uid: int, req: SupportMsg, admin=Depends(require_admin)):
+def admin_support_reply(uid: int, req: SupportMsg, admin=Depends(require_admin)):
     body = req.body.strip()
     if not body or len(body) > SUPPORT_MAX:
         raise HTTPException(400, "Nachricht leer oder zu lang (max. 2000 Zeichen).")
@@ -673,7 +695,7 @@ class GrantReq(BaseModel):
 
 
 @app.get("/api/admin/overview")
-async def admin_overview(admin=Depends(require_admin)):
+def admin_overview(admin=Depends(require_admin)):
     now = time.time()
     with db() as con:
         s = billing.get_settings(con)
@@ -697,7 +719,7 @@ async def admin_overview(admin=Depends(require_admin)):
 
 
 @app.get("/api/admin/export")
-async def admin_export(admin=Depends(require_admin)):
+def admin_export(admin=Depends(require_admin)):
     """Abo-Liste als Datei (ohne Passwörter), als Notfall-Sicherung."""
     with db() as con:
         rows = con.execute(
@@ -716,8 +738,7 @@ async def admin_price(req: PriceReq, admin=Depends(require_admin)):
     cents = round(req.price * 100)
     if not 50 <= cents <= 100000:
         raise HTTPException(400, "Der Preis muss zwischen 0.50 und 1000 liegen.")
-    with db() as con:
-        subs = billing.change_price(con, cents)
+    subs = await in_db(billing.change_price, cents)
     failed = 0
     if subs and billing.payments_mode() == "stripe":
         results = await asyncio.gather(
@@ -768,7 +789,7 @@ async def admin_test_pro(admin=Depends(require_admin)):
 
 
 @app.post("/api/admin/sales")
-async def admin_sales(req: SalesReq, admin=Depends(require_admin)):
+def admin_sales(req: SalesReq, admin=Depends(require_admin)):
     """Verkauf sperren/öffnen: neue Pro-Käufe sind gesperrt, bestehende Abos laufen normal weiter."""
     with db() as con:
         billing.set_setting(con, "sales_open", 1 if req.open else 0)
@@ -776,7 +797,7 @@ async def admin_sales(req: SalesReq, admin=Depends(require_admin)):
 
 
 @app.post("/api/admin/free-limit")
-async def admin_free_limit(req: LimitReq, admin=Depends(require_admin)):
+def admin_free_limit(req: LimitReq, admin=Depends(require_admin)):
     if not 1000 <= req.tokens <= 10_000_000:
         raise HTTPException(400, "Das Limit muss zwischen 1000 und 10 000 000 Tokens liegen.")
     with db() as con:
@@ -785,7 +806,7 @@ async def admin_free_limit(req: LimitReq, admin=Depends(require_admin)):
 
 
 @app.post("/api/admin/promos")
-async def admin_add_promo(req: PromoReq, admin=Depends(require_admin)):
+def admin_add_promo(req: PromoReq, admin=Depends(require_admin)):
     name = req.name.strip()[:60]
     if not name or not 1 <= req.free_days <= 365:
         raise HTTPException(400, "Name und Gratis-Tage (1–365) angeben.")
@@ -804,21 +825,21 @@ async def admin_add_promo(req: PromoReq, admin=Depends(require_admin)):
 
 
 @app.post("/api/admin/promos/{pid}/toggle")
-async def admin_toggle_promo(pid: int, admin=Depends(require_admin)):
+def admin_toggle_promo(pid: int, admin=Depends(require_admin)):
     with db() as con:
         con.execute("UPDATE promos SET active = 1 - active WHERE id = ?", (pid,))
     return {"ok": True}
 
 
 @app.delete("/api/admin/promos/{pid}")
-async def admin_delete_promo(pid: int, admin=Depends(require_admin)):
+def admin_delete_promo(pid: int, admin=Depends(require_admin)):
     with db() as con:
         con.execute("DELETE FROM promos WHERE id = ?", (pid,))
     return {"ok": True}
 
 
 @app.post("/api/admin/users/{uid}/grant")
-async def admin_grant(uid: int, req: GrantReq, admin=Depends(require_admin)):
+def admin_grant(uid: int, req: GrantReq, admin=Depends(require_admin)):
     if not 1 <= req.days <= 3650:
         raise HTTPException(400, "Tage zwischen 1 und 3650.")
     with db() as con:
@@ -830,12 +851,14 @@ async def admin_grant(uid: int, req: GrantReq, admin=Depends(require_admin)):
 
 @app.post("/api/admin/users/{uid}/revoke")
 async def admin_revoke(uid: int, admin=Depends(require_admin)):
-    with db() as con:
+    def revoke(con):
         if not con.execute("SELECT 1 FROM users WHERE id = ?", (uid,)).fetchone():
             raise HTTPException(404, "Nutzer nicht gefunden")
         if uid == admin["id"]:
             raise HTTPException(400, "Du kannst dir selbst nicht Pro entziehen.")
-        sub = billing.revoke_pro(con, uid)
+        return billing.revoke_pro(con, uid)
+
+    sub = await in_db(revoke)
     if sub and billing.payments_mode() == "stripe":
         try:
             await billing.stripe_cancel_now(sub)

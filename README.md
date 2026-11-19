@@ -50,6 +50,13 @@ Nutzer öffnen im Konto **Support kontaktieren** und schreiben dem Admin. Der Ad
 unter **Support-Postfach** (roter Punkt am Plan-Symbol) und antwortet dort. Die Antwort erscheint beim Nutzer im Support-Fenster.
 Pro Nutzer sind höchstens 20 Nachrichten pro Stunde erlaubt, jede höchstens 2000 Zeichen.
 
+## Schnell und stabil
+
+Alle Datenbank-Zugriffe laufen in Threads, damit eine langsame Datenbank (z. B. Neon wacht gerade auf) nicht den ganzen
+Server blockiert. Der Health-Check von Render antwortet deshalb immer sofort. Bei Postgres werden Verbindungen in einem
+Pool wiederverwendet (`DB_POOL_MAX`, Standard 10). Tote Verbindungen (Neon schließt ungenutzte) werden automatisch ersetzt.
+Tipp: Render und Neon sollten in derselben Region stehen (hier Neon: Frankfurt), das spart bei jeder Anfrage Zeit.
+
 ## Daten bleiben bei Updates erhalten
 
 Konten, Abos, Chats, Einstellungen und Support-Nachrichten liegen in der Datenbank (`DATABASE_URL`, Neon). Ein Update
