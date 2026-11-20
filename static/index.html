@@ -749,7 +749,7 @@ async function pollSupport() {
   if (v === 'adminsupport') openAdminSupport(true);
 }
 let tick = 0;
-setInterval(() => { if (!document.hidden && acct) { pollSupport(); if (++tick % 2 === 0) refreshMe(); } }, 45000);
+setInterval(() => { if (!document.hidden && acct) { pollSupport(); refreshMe(); } }, 45000);
 function renderMe() {
   const pro = acct.plan === 'pro';
   const pb = $('planbtn');
@@ -865,7 +865,7 @@ async function openLeaderboard() {
 $('lbbtn').onclick = openLeaderboard;
 
 /* ---------- Belohnung: fallende Emojis, Buchstaben und Wörter ---------- */
-let rewarding = false, rewardCanvas = null;
+let rewarding = false, rewardCanvas = null, lastReward = null;
 function parseItems(s) {
   s = String(s || '');
   const parts = /[,;\n]/.test(s) ? s.split(/[,;\n]+/) : s.split(/\s+/);
@@ -1004,6 +1004,7 @@ async function openAdmin() {
   const j = await r.json().catch(() => ({}));
   if (!r.ok) { $('mbody').innerHTML = '<h2>Admin</h2><p>' + esc(j.detail || 'Fehler') + '</p>'; return; }
   const s = j.settings, now = Date.now() / 1000;
+  lastReward = j.reward;
   const modeTxt = { off: 'Bezahlung ist AUS (nur du kannst Pro vergeben).', test: 'TESTMODUS: „Pro holen“ aktiviert Pro ohne Zahlung!', stripe: 'Echte Bezahlung über Stripe ist aktiv.' }[j.payments];
   const promos = j.promos.map(p => '<div class="card"><b>' + esc(p.name) + '</b> · ' + p.free_days + ' Tage gratis' +
     (p.ends_at ? ' · bis ' + dateStr(p.ends_at - 86400) : '') + ' ' + (p.active ? '<span class="tag pro">aktiv</span>' : '<span class="tag">aus</span>') +
@@ -1013,7 +1014,7 @@ async function openAdmin() {
     (u.pro ? '<span class="tag pro">Pro</span>' + (u.is_admin ? '' : '<br><small class="muted">bis ' + dateStr(u.pro_until) + (u.auto_renew ? ' ↻' : '') + '</small>') : '<span class="tag">Gratis</span>') +
     '</td><td>' + tok(u.tokens_today) + '</td><td>' + (u.is_admin ? '' :
     '<button class="btn" data-a="grant" data-id="' + u.id + '">+30 Tage</button> ' +
-    '<button class="btn" data-a="rwuser" data-id="' + u.id + '" title="Belohnung für diesen Nutzer abspielen">🎁</button> ' +
+    '<button class="btn" data-a="rwuser" data-id="' + u.id + '" data-name="' + escA(u.username) + '" title="Belohnung nur für dieses Konto senden (auch ohne Pro)">🎁</button> ' +
     '<button class="btn" data-a="boarduser" data-id="' + u.id + '" data-hide="' + (u.hide_board ? 0 : 1) + '" title="In der Rangliste zeigen/verstecken">🏆' + (u.hide_board ? ' versteckt' : '') + '</button> ' +
     (u.pro ? '<button class="btn danger" data-a="revoke" data-id="' + u.id + '">Entziehen</button>' : '')) + '</td></tr>').join('');
   $('mbody').innerHTML = '<h2>Admin-Bereich</h2><p class="muted">' + esc(modeTxt) + '</p>' +
@@ -1046,7 +1047,19 @@ async function openAdmin() {
     '<h3>Nutzer (' + j.users.length + ')</h3><div style="overflow-x:auto"><table class="users"><tr><th>Name</th><th>Plan</th><th>Tokens heute</th><th></th></tr>' + users + '</table></div>' +
     '<div class="row2" style="margin-top:14px"><button class="btn" data-a="back">← Zurück zum Konto</button></div>';
 }
-const escA = s => esc(String(s)).replace(/"/g, '&quot;');
+const escA = s => esc(String(s)).replace(/\"/g, '&quot;');
+function openRewardFor(id, name) {
+  const r = lastReward || { items: '🎉, Pro', count: 70, seconds: 6, message: '' };
+  openModal('adminreward');
+  $('mbody').innerHTML = '<h2></h2><p class="muted">Nur dieses Konto bekommt die Belohnung, auch wenn es <b>kein Pro</b> hat. Es sieht sie, sobald Lumora bei ihm geöffnet ist (spätestens nach etwa einer Minute). Alle anderen sehen nichts.</p>' +
+    '<div class="card"><p class="muted">Was soll fallen? (mit Komma trennen: Emojis, Buchstaben, Wörter)</p>' +
+    '<div class="row2"><input id="ru_items" value="' + escA(r.items) + '"></div>' +
+    '<div class="row2"><span>Wie viele</span><input id="ru_count" type="number" min="10" max="200" value="' + r.count + '" style="max-width:90px"><span>Sekunden</span><input id="ru_secs" type="number" min="2" max="15" value="' + r.seconds + '" style="max-width:80px"></div>' +
+    '<div class="row2"><input id="ru_msg" maxlength="80" placeholder="Nachricht oben (leer = Danke für Pro! 🎉)" value="' + escA(r.message) + '"></div>' +
+    '<div class="row2"><button class="btn" data-a="rwupreview" type="button">▶ Vorschau bei mir</button><button class="primary" data-a="rwusend" data-id="' + id + '" data-name="' + escA(name) + '" type="button">🎁 Jetzt senden</button></div></div>' +
+    '<div class="row2" style="margin-top:12px"><button class="btn" data-a="sadmin" type="button">← Zurück zum Admin-Bereich</button></div>';
+  $('mbody').querySelector('h2').textContent = '🎁 Belohnung für ' + name;
+}
 async function openAdminSupport(quiet) {
   if (!quiet) { openModal('adminsupport'); $('mbody').innerHTML = '<h2>Support-Postfach</h2><p class="muted">Lädt …</p>'; }
   const r = await fetch('/api/admin/support'); const list = await r.json().catch(() => []);
@@ -1123,7 +1136,12 @@ $('mbody').addEventListener('click', async e => {
   else if (a === 'lbtoggle') { j = await adminPost('/api/admin/leaderboard', { on: b.dataset.on === '1' }); if (j) toast(j.on ? '✓ Rangliste eingeschaltet' : '✓ Rangliste ausgeschaltet'); }
   else if (a === 'rwpreview') { playReward({ items: $('rw_items').value, count: parseInt($('rw_count').value, 10), seconds: parseInt($('rw_secs').value, 10), message: $('rw_msg').value }); return; }
   else if (a === 'rwsave') { j = await adminPost('/api/admin/reward-config', { on: $('rw_on').checked, items: $('rw_items').value, count: parseInt($('rw_count').value, 10), seconds: parseInt($('rw_secs').value, 10), message: $('rw_msg').value }); if (j) toast('✓ Belohnung gespeichert'); }
-  else if (a === 'rwuser') { j = await adminPost('/api/admin/users/' + id + '/reward'); if (j) toast('🎁 Wird beim nächsten Öffnen von Lumora bei diesem Nutzer abgespielt'); }
+  else if (a === 'rwuser') { openRewardFor(id, b.dataset.name || ''); return; }
+  else if (a === 'rwupreview') { playReward({ items: $('ru_items').value, count: parseInt($('ru_count').value, 10), seconds: parseInt($('ru_secs').value, 10), message: $('ru_msg').value }); return; }
+  else if (a === 'rwusend') {
+    j = await adminPost('/api/admin/users/' + id + '/reward', { items: $('ru_items').value, count: parseInt($('ru_count').value, 10), seconds: parseInt($('ru_secs').value, 10), message: $('ru_msg').value });
+    if (j) { toast('🎁 Gesendet an ' + (b.dataset.name || 'das Konto') + '. Es wird dort abgespielt, sobald Lumora geöffnet ist.'); openAdmin(); return; }
+  }
   else if (a === 'boarduser') { j = await adminPost('/api/admin/users/' + id + '/board', { hide: b.dataset.hide === '1' }); if (j) toast(b.dataset.hide === '1' ? '✓ In der Rangliste versteckt' : '✓ In der Rangliste sichtbar'); }
   else if (a === 'limit') { j = await adminPost('/api/admin/free-limit', { tokens: parseInt($('alimit').value, 10) }); if (j) toast('✓ Limit gespeichert'); }
   else if (a === 'padd') { j = await adminPost('/api/admin/promos', { name: $('pname').value, free_days: parseInt($('pdays').value, 10), ends: $('pends').value || null }); if (j) toast('✓ Aktion angelegt'); }

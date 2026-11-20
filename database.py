@@ -119,6 +119,8 @@ SCHEMA = [
     "CREATE INDEX IF NOT EXISTS idx_support_user ON support_messages(user_id, id)",
     # --- Rangliste & Belohnung: pro_first = Beginn des ersten Pro, pro_gap = Zeit ohne Pro dazwischen,
     # hide_board = nicht in der Rangliste zeigen, reward_pending = 1 Kauf-Belohnung / 2 vom Admin ausgelöst
+    # Eigene Belohnung nur für ein Konto (vom Admin ausgelöst); wird nach dem Abspielen gelöscht
+    "CREATE TABLE IF NOT EXISTS reward_custom (user_id INTEGER NOT NULL PRIMARY KEY, cfg TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS pro_stats (user_id INTEGER NOT NULL PRIMARY KEY, "
     "pro_first REAL NOT NULL DEFAULT 0, pro_gap REAL NOT NULL DEFAULT 0, "
     "hide_board INTEGER NOT NULL DEFAULT 0, reward_pending INTEGER NOT NULL DEFAULT 0)",

@@ -52,7 +52,8 @@ Persönlichkeit anpassen: `SYSTEM_PROMPT` in `app.py`. Anbieter: `LUMORA_PROVIDE
 - **Belohnung:** Kauft jemand Pro, fallen Emojis, Buchstaben und Wörter über den Bildschirm. Im Admin-Bereich stellst du ein,
   was fällt (mit Komma trennen, z. B. `👍, ❤️, Danke, A, B`, mehrere Dinge gleichzeitig), wie viele, wie lange und welche
   Nachricht oben steht. **Vorschau** zeigt es sofort. Mit 🎁 in der Nutzerliste löst du sie für einen einzelnen Nutzer aus
-  (er sieht sie beim nächsten Öffnen von Lumora). Bei Nutzern mit „Bewegung reduzieren“ erscheint nur die Nachricht.
+  (er sieht sie beim nächsten Öffnen von Lumora). Das Formular dahinter lässt dich für genau dieses Konto frei wählen, was fällt, wie viele,
+  wie lange und welche Nachricht, auch bei Gratis-Konten ohne Pro; alle anderen sehen nichts. Bei Nutzern mit „Bewegung reduzieren“ erscheint nur die Nachricht.
 
 ## Support (ein echter Mensch antwortet)
 

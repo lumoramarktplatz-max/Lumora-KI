@@ -136,7 +136,7 @@ def account_info(con, user: dict, now: float | None = None) -> dict:
         "leaderboard_on": bool(s["leaderboard_on"]),
         "lb_show": not st["hide_board"],
         "pro_ever": st["pro_first"] > 0 and not admin,
-        "reward": reward_for(con, st),
+        "reward": reward_for(con, st, user["id"]),
         "username": user["username"],
         "is_admin": admin,
         "admin_needs_password_change": bool(p["is_admin"] and p["pw_default"]),
@@ -229,10 +229,29 @@ def leaderboard(con, now: float | None = None) -> list[dict]:
     return items
 
 
-def reward_for(con, st: dict):
-    """Die Belohnung, die dieser Nutzer jetzt sehen soll (oder None)."""
+def set_custom_reward(con, user_id: int, cfg: dict | None):
+    """Eigene Belohnung nur für dieses Konto speichern (None = die allgemeine Einstellung verwenden)."""
+    if cfg is None:
+        con.execute("DELETE FROM reward_custom WHERE user_id = ?", (user_id,))
+        return
+    con.execute(
+        "INSERT INTO reward_custom (user_id, cfg) VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET cfg = excluded.cfg",
+        (user_id, json.dumps({k: cfg[k] for k in ("items", "count", "seconds", "message")}, ensure_ascii=False)),
+    )
+
+
+def reward_for(con, st: dict, user_id: int | None = None):
+    """Die Belohnung, die dieser Nutzer jetzt sehen soll (oder None). Gilt für Gratis- und Pro-Konten."""
     cfg = get_reward_cfg(con)
-    if st["reward_pending"] >= 2 or (st["reward_pending"] == 1 and cfg["on"]):
+    if st["reward_pending"] >= 2:  # vom Admin ausgelöst: immer, ggf. mit eigenem Inhalt nur für dieses Konto
+        row = con.execute("SELECT cfg FROM reward_custom WHERE user_id = ?", (user_id,)).fetchone() if user_id else None
+        if row:
+            try:
+                cfg = {**cfg, **json.loads(row["cfg"])}
+            except Exception:
+                pass
+        return {k: cfg[k] for k in ("items", "count", "seconds", "message")}
+    if st["reward_pending"] == 1 and cfg["on"]:
         return {k: cfg[k] for k in ("items", "count", "seconds", "message")}
     return None
 

@@ -722,6 +722,7 @@ def reward_seen(user=Depends(current_user)):
     with db() as con:
         billing.get_stats(con, user["id"])
         con.execute("UPDATE pro_stats SET reward_pending = 0 WHERE user_id = ?", (user["id"],))
+        billing.set_custom_reward(con, user["id"], None)
     return {"ok": True}
 
 
@@ -871,34 +872,57 @@ def admin_leaderboard(req: BoardReq, admin=Depends(require_admin)):
     return {"ok": True, "on": req.on}
 
 
-@app.post("/api/admin/reward-config")
-def admin_reward_config(req: RewardCfgReq, admin=Depends(require_admin)):
-    toks = reward_tokens(req.items)
+def check_reward(items: str, count: int, seconds: int, message: str) -> dict:
+    toks = reward_tokens(items)
     if not toks:
         raise HTTPException(400, "Bitte mindestens ein Emoji, einen Buchstaben oder ein Wort eintragen.")
     if len(toks) > 30 or any(len(t) > 24 for t in toks):
         raise HTTPException(400, "Höchstens 30 Dinge, jedes höchstens 24 Zeichen lang.")
-    if not 10 <= req.count <= 200:
+    if not 10 <= count <= 200:
         raise HTTPException(400, "Die Anzahl muss zwischen 10 und 200 liegen.")
-    if not 2 <= req.seconds <= 15:
+    if not 2 <= seconds <= 15:
         raise HTTPException(400, "Die Dauer muss zwischen 2 und 15 Sekunden liegen.")
-    if len(req.message) > 80:
+    if len(message) > 80:
         raise HTTPException(400, "Die Nachricht darf höchstens 80 Zeichen lang sein.")
-    cfg = {"on": req.on, "items": ", ".join(toks), "count": req.count, "seconds": req.seconds, "message": req.message.strip()}
+    return {"items": ", ".join(toks), "count": count, "seconds": seconds, "message": message.strip()}
+
+
+@app.post("/api/admin/reward-config")
+def admin_reward_config(req: RewardCfgReq, admin=Depends(require_admin)):
+    cfg = {"on": req.on, **check_reward(req.items, req.count, req.seconds, req.message)}
     with db() as con:
         billing.set_reward_cfg(con, cfg)
     return {"ok": True, "reward": cfg}
 
 
+class RewardSend(BaseModel):
+    items: str | None = None
+    count: int | None = None
+    seconds: int | None = None
+    message: str | None = None
+
+
 @app.post("/api/admin/users/{uid}/reward")
-def admin_trigger_reward(uid: int, admin=Depends(require_admin)):
-    """Belohnung für genau diesen Nutzer auslösen (er sieht sie beim nächsten Öffnen von Lumora)."""
+def admin_trigger_reward(uid: int, req: RewardSend | None = None, admin=Depends(require_admin)):
+    """Belohnung nur für dieses eine Konto auslösen (auch wenn es kein Pro hat). Mit Angaben im Body fällt, was du
+    eintippst; fehlende Angaben kommen aus der allgemeinen Einstellung. Der Nutzer sieht sie beim nächsten Öffnen."""
+    custom = None
+    if req and any(v is not None for v in (req.items, req.count, req.seconds, req.message)):
+        with db() as con:
+            base = billing.get_reward_cfg(con)
+        custom = check_reward(
+            req.items if req.items is not None else base["items"],
+            req.count if req.count is not None else base["count"],
+            req.seconds if req.seconds is not None else base["seconds"],
+            req.message if req.message is not None else base["message"],
+        )
     with db() as con:
         if not con.execute("SELECT 1 FROM users WHERE id = ?", (uid,)).fetchone():
             raise HTTPException(404, "Nutzer nicht gefunden")
         billing.get_stats(con, uid)
+        billing.set_custom_reward(con, uid, custom)
         con.execute("UPDATE pro_stats SET reward_pending = 2 WHERE user_id = ?", (uid,))
-    return {"ok": True}
+    return {"ok": True, "custom": custom}
 
 
 @app.post("/api/admin/users/{uid}/board")
