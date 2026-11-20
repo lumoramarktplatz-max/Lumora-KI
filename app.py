@@ -130,8 +130,21 @@ ON_RENDER = bool(os.getenv("RENDER"))
 if ON_RENDER and not PG:
     print("!!! WARNUNG: DATABASE_URL fehlt. Konten, Chats und Abos liegen in einer Datei, die bei jedem "
           "Deploy gelöscht wird. Bitte DATABASE_URL (Neon) auf Render eintragen.", file=sys.stderr, flush=True)
+def backfill_pro_stats():
+    """Nutzer, die schon vor der Rangliste Pro hatten: Beginn grob schätzen (Ende minus ein Monat)."""
+    with db() as con:
+        rows = con.execute(
+            "SELECT p.user_id, p.pro_until FROM profiles p LEFT JOIN pro_stats s ON s.user_id = p.user_id "
+            "WHERE p.pro_until > 0 AND p.is_admin = 0 AND (s.user_id IS NULL OR s.pro_first <= 0)"
+        ).fetchall()
+        for r in rows:
+            billing.get_stats(con, r["user_id"])
+            con.execute("UPDATE pro_stats SET pro_first = ? WHERE user_id = ?", (r["pro_until"] - billing.MONTH, r["user_id"]))
+
+
 init_db()
 ensure_admin()
+backfill_pro_stats()
 
 
 # ============================================================ KI-Anbieter
@@ -675,6 +688,43 @@ def admin_support_reply(uid: int, req: SupportMsg, admin=Depends(require_admin))
     return {"ok": True}
 
 
+# ============================================================ Rangliste & Belohnung
+class ShowReq(BaseModel):
+    show: bool
+
+
+@app.get("/api/leaderboard")
+def get_leaderboard(user=Depends(current_user)):
+    """Wer hatte am längsten Pro? (für alle angemeldeten Nutzer; ohne Admins und ohne ausgeblendete Nutzer)"""
+    now = time.time()
+    with db() as con:
+        if not billing.get_settings(con)["leaderboard_on"]:
+            return {"enabled": False, "entries": [], "total": 0, "me": None}
+        items = billing.leaderboard(con, now)
+        hidden = bool(billing.get_stats(con, user["id"])["hide_board"])
+    me = next((i for i in items if i["id"] == user["id"]), None)
+    entries = [{"rank": i["rank"], "username": i["username"], "seconds": int(i["seconds"]),
+                "active": i["active"], "me": i["id"] == user["id"]} for i in items[:50]]
+    return {"enabled": True, "entries": entries, "total": len(items),
+            "me": {"rank": me["rank"] if me else None, "hidden": hidden}}
+
+
+@app.post("/api/leaderboard/me")
+def leaderboard_visibility(req: ShowReq, user=Depends(current_user)):
+    with db() as con:
+        billing.get_stats(con, user["id"])
+        con.execute("UPDATE pro_stats SET hide_board = ? WHERE user_id = ?", (0 if req.show else 1, user["id"]))
+    return {"ok": True}
+
+
+@app.post("/api/reward/seen")
+def reward_seen(user=Depends(current_user)):
+    with db() as con:
+        billing.get_stats(con, user["id"])
+        con.execute("UPDATE pro_stats SET reward_pending = 0 WHERE user_id = ?", (user["id"],))
+    return {"ok": True}
+
+
 # ============================================================ Admin
 class PriceReq(BaseModel):
     price: float
@@ -705,8 +755,10 @@ def admin_overview(admin=Depends(require_admin)):
             "SELECT u.id, u.username, u.created, COALESCE(p.is_admin, 0) AS is_admin, "
             "COALESCE(p.pro_until, 0) AS pro_until, COALESCE(p.auto_renew, 0) AS auto_renew, "
             "COALESCE(p.ended_reason, '') AS ended_reason, COALESCE(p.price_cents, 0) AS price_cents, "
+            "COALESCE(st.hide_board, 0) AS hide_board, "
             "COALESCE((SELECT tokens FROM token_usage t WHERE t.user_id = u.id AND t.day = ?), 0) AS tokens_today "
-            "FROM users u LEFT JOIN profiles p ON p.user_id = u.id ORDER BY u.id DESC LIMIT 500",
+            "FROM users u LEFT JOIN profiles p ON p.user_id = u.id LEFT JOIN pro_stats st ON st.user_id = u.id "
+            "ORDER BY u.id DESC LIMIT 500",
             (billing.today(),),
         ).fetchall()
     users = []
@@ -714,7 +766,9 @@ def admin_overview(admin=Depends(require_admin)):
         d = dict(r)
         d["pro"] = bool(d["is_admin"]) or d["pro_until"] > now
         users.append(d)
-    return {"settings": s, "promos": promos, "users": users, "payments": billing.payments_mode(),
+    with db() as con:
+        reward = billing.get_reward_cfg(con)
+    return {"settings": s, "promos": promos, "users": users, "payments": billing.payments_mode(), "reward": reward,
             "db": {"persistent": PG or not ON_RENDER, "postgres": PG}}
 
 
@@ -786,6 +840,76 @@ async def admin_test_pro(admin=Depends(require_admin)):
         info["error"] = f"{type(e).__name__}{f' {status}' if status else ''}: {str(e)[:220]}" + (f" | Ursache: {cause}" if cause else "")
         info["hint"] = hint
     return info
+
+
+class BoardReq(BaseModel):
+    on: bool
+
+
+class HideReq(BaseModel):
+    hide: bool
+
+
+class RewardCfgReq(BaseModel):
+    on: bool
+    items: str
+    count: int
+    seconds: int
+    message: str = ""
+
+
+def reward_tokens(items: str) -> list[str]:
+    """Was fällt? Mit Komma/Semikolon/Zeilenumbruch trennen; ohne diese Zeichen zählt jedes Wort einzeln."""
+    parts = re.split(r"[,;\n]+", items) if re.search(r"[,;\n]", items) else items.split()
+    return [p.strip() for p in parts if p.strip()]
+
+
+@app.post("/api/admin/leaderboard")
+def admin_leaderboard(req: BoardReq, admin=Depends(require_admin)):
+    with db() as con:
+        billing.set_setting(con, "leaderboard_on", 1 if req.on else 0)
+    return {"ok": True, "on": req.on}
+
+
+@app.post("/api/admin/reward-config")
+def admin_reward_config(req: RewardCfgReq, admin=Depends(require_admin)):
+    toks = reward_tokens(req.items)
+    if not toks:
+        raise HTTPException(400, "Bitte mindestens ein Emoji, einen Buchstaben oder ein Wort eintragen.")
+    if len(toks) > 30 or any(len(t) > 24 for t in toks):
+        raise HTTPException(400, "Höchstens 30 Dinge, jedes höchstens 24 Zeichen lang.")
+    if not 10 <= req.count <= 200:
+        raise HTTPException(400, "Die Anzahl muss zwischen 10 und 200 liegen.")
+    if not 2 <= req.seconds <= 15:
+        raise HTTPException(400, "Die Dauer muss zwischen 2 und 15 Sekunden liegen.")
+    if len(req.message) > 80:
+        raise HTTPException(400, "Die Nachricht darf höchstens 80 Zeichen lang sein.")
+    cfg = {"on": req.on, "items": ", ".join(toks), "count": req.count, "seconds": req.seconds, "message": req.message.strip()}
+    with db() as con:
+        billing.set_reward_cfg(con, cfg)
+    return {"ok": True, "reward": cfg}
+
+
+@app.post("/api/admin/users/{uid}/reward")
+def admin_trigger_reward(uid: int, admin=Depends(require_admin)):
+    """Belohnung für genau diesen Nutzer auslösen (er sieht sie beim nächsten Öffnen von Lumora)."""
+    with db() as con:
+        if not con.execute("SELECT 1 FROM users WHERE id = ?", (uid,)).fetchone():
+            raise HTTPException(404, "Nutzer nicht gefunden")
+        billing.get_stats(con, uid)
+        con.execute("UPDATE pro_stats SET reward_pending = 2 WHERE user_id = ?", (uid,))
+    return {"ok": True}
+
+
+@app.post("/api/admin/users/{uid}/board")
+def admin_user_board(uid: int, req: HideReq, admin=Depends(require_admin)):
+    """Einen Nutzer in der Rangliste verstecken oder wieder zeigen."""
+    with db() as con:
+        if not con.execute("SELECT 1 FROM users WHERE id = ?", (uid,)).fetchone():
+            raise HTTPException(404, "Nutzer nicht gefunden")
+        billing.get_stats(con, uid)
+        con.execute("UPDATE pro_stats SET hide_board = ? WHERE user_id = ?", (1 if req.hide else 0, uid))
+    return {"ok": True}
 
 
 @app.post("/api/admin/sales")

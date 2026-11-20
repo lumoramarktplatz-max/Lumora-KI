@@ -1,6 +1,7 @@
 """Pläne (Gratis/Pro), Token-Limit, Aktionen, Abos und Stripe-Anbindung."""
 import hashlib
 import hmac
+import json
 import os
 import time
 from datetime import datetime, timezone
@@ -15,8 +16,8 @@ except Exception:  # tzdata fehlt -> UTC
     TZ = timezone.utc
 
 MONTH = 30 * 86400
-DEFAULTS = {"price_cents": 500, "currency": "CHF", "free_daily_tokens": 30000, "sales_open": 1}
-INT_SETTINGS = {"price_cents", "free_daily_tokens", "sales_open"}
+DEFAULTS = {"price_cents": 500, "currency": "CHF", "free_daily_tokens": 30000, "sales_open": 1, "leaderboard_on": 1}
+INT_SETTINGS = {"price_cents", "free_daily_tokens", "sales_open", "leaderboard_on"}
 STRIPE_API = "https://api.stripe.com/v1"
 STRIPE_TRANSPORT = None  # nur für Tests austauschbar
 APP_TAG = "lumora"  # Marker, damit Ereignisse anderer Websites im selben Stripe-Konto ignoriert werden
@@ -130,7 +131,12 @@ def account_info(con, user: dict, now: float | None = None) -> dict:
     admin, pro = is_admin(p), is_pro(p, now)
     promo = eligible_promo(con, p, now)
     used = tokens_used(con, user["id"])
+    st = get_stats(con, user["id"])
     return {
+        "leaderboard_on": bool(s["leaderboard_on"]),
+        "lb_show": not st["hide_board"],
+        "pro_ever": st["pro_first"] > 0 and not admin,
+        "reward": reward_for(con, st),
         "username": user["username"],
         "is_admin": admin,
         "admin_needs_password_change": bool(p["is_admin"] and p["pw_default"]),
@@ -155,6 +161,82 @@ def account_info(con, user: dict, now: float | None = None) -> dict:
     }
 
 
+# ---------------------------------------------------------------- Rangliste & Belohnung
+REWARD_DEFAULT = {"on": True, "items": "👍, ❤️, 🎉, ⭐, Pro", "count": 70, "seconds": 6, "message": ""}
+
+
+def get_reward_cfg(con) -> dict:
+    cfg = dict(REWARD_DEFAULT)
+    r = con.execute("SELECT value FROM settings WHERE name = 'reward_cfg'").fetchone()
+    if r:
+        try:
+            cfg.update({k: v for k, v in json.loads(r["value"]).items() if k in cfg})
+        except Exception:
+            pass
+    return cfg
+
+
+def set_reward_cfg(con, cfg: dict):
+    set_setting(con, "reward_cfg", json.dumps({k: cfg[k] for k in REWARD_DEFAULT}, ensure_ascii=False))
+
+
+def get_stats(con, user_id: int) -> dict:
+    row = con.execute("SELECT * FROM pro_stats WHERE user_id = ?", (user_id,)).fetchone()
+    if not row:
+        con.execute("INSERT INTO pro_stats (user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING", (user_id,))
+        row = con.execute("SELECT * FROM pro_stats WHERE user_id = ?", (user_id,)).fetchone()
+    return dict(row)
+
+
+def note_pro_start(con, user_id: int, old_until: float, now: float, purchase: bool):
+    """Ein Pro-Zeitraum beginnt (neu oder nach einer Pause): für die Rangliste merken, ggf. Belohnung vormerken."""
+    st = get_stats(con, user_id)
+    first, gap = st["pro_first"], st["pro_gap"]
+    if first <= 0:
+        first = now
+    elif first < old_until < now:
+        gap += now - old_until  # Zeit ohne Pro zählt nicht mit
+    pending = max(st["reward_pending"], 1) if purchase else st["reward_pending"]
+    con.execute(
+        "UPDATE pro_stats SET pro_first = ?, pro_gap = ?, reward_pending = ? WHERE user_id = ?",
+        (first, gap, pending, user_id),
+    )
+
+
+def pro_seconds(st: dict, pro_until: float, now: float) -> float:
+    """Wie lange hatte der Nutzer insgesamt Pro (bis jetzt bzw. bis zum Ende seines letzten Zeitraums)?"""
+    if st["pro_first"] <= 0:
+        return 0.0
+    return max(0.0, min(now, pro_until) - st["pro_first"] - st["pro_gap"])
+
+
+def leaderboard(con, now: float | None = None) -> list[dict]:
+    """Alle Nutzer mit Pro-Geschichte, längste Dauer zuerst. Admins und versteckte Nutzer sind nicht dabei."""
+    now = now or time.time()
+    rows = con.execute(
+        "SELECT u.id, u.username, p.pro_until, s.pro_first, s.pro_gap FROM pro_stats s "
+        "JOIN users u ON u.id = s.user_id JOIN profiles p ON p.user_id = s.user_id "
+        "WHERE s.pro_first > 0 AND s.hide_board = 0 AND p.is_admin = 0"
+    ).fetchall()
+    items = []
+    for r in rows:
+        secs = pro_seconds(r, r["pro_until"], now)
+        items.append({"id": r["id"], "username": r["username"], "seconds": secs,
+                      "active": r["pro_until"] > now, "first": r["pro_first"]})
+    items.sort(key=lambda x: (-x["seconds"], x["first"], x["id"]))
+    for i, it in enumerate(items, 1):
+        it["rank"] = i
+    return items
+
+
+def reward_for(con, st: dict):
+    """Die Belohnung, die dieser Nutzer jetzt sehen soll (oder None)."""
+    cfg = get_reward_cfg(con)
+    if st["reward_pending"] >= 2 or (st["reward_pending"] == 1 and cfg["on"]):
+        return {k: cfg[k] for k in ("items", "count", "seconds", "message")}
+    return None
+
+
 # ---------------------------------------------------------------- Abo-Aktionen
 def activate_test(con, user_id: int, now: float | None = None):
     """Test-Modus: Abo ohne echte Zahlung starten."""
@@ -163,6 +245,8 @@ def activate_test(con, user_id: int, now: float | None = None):
     promo = eligible_promo(con, p, now)
     s = get_settings(con)
     seconds = promo["free_days"] * 86400 if promo else MONTH
+    if p["pro_until"] <= now:
+        note_pro_start(con, user_id, p["pro_until"], now, purchase=True)
     con.execute(
         "UPDATE profiles SET pro_until = ?, auto_renew = 1, price_cents = ?, ended_reason = '', "
         "trial_used = ? WHERE user_id = ?",
@@ -201,6 +285,8 @@ def grant_days(con, user_id: int, days: int, now: float | None = None):
     now = now or time.time()
     p = get_profile(con, user_id, now)
     base = max(p["pro_until"], now)
+    if p["pro_until"] <= now:
+        note_pro_start(con, user_id, p["pro_until"], now, purchase=False)
     con.execute(
         "UPDATE profiles SET pro_until = ?, ended_reason = CASE WHEN auto_renew = 1 THEN ended_reason "
         "ELSE 'gift' END WHERE user_id = ?",
@@ -211,8 +297,8 @@ def grant_days(con, user_id: int, days: int, now: float | None = None):
 def revoke_pro(con, user_id: int) -> str:
     p = get_profile(con, user_id)
     con.execute(
-        "UPDATE profiles SET pro_until = 0, auto_renew = 0, ended_reason = 'revoked' WHERE user_id = ?",
-        (user_id,),
+        "UPDATE profiles SET pro_until = ?, auto_renew = 0, ended_reason = 'revoked' WHERE user_id = ?",
+        (min(p["pro_until"], time.time()) if p["pro_until"] > 0 else 0, user_id),
     )
     return p["stripe_sub"]
 
@@ -311,6 +397,9 @@ def apply_subscription(con, sub: dict, adopt: bool = False):
     cancelling = bool(sub.get("cancel_at_period_end") or sub.get("cancel_at"))
     if status in ("active", "trialing", "past_due"):
         end = _period_end(sub)
+        now_ts = time.time()
+        if status != "past_due" and end > now_ts and row["pro_until"] <= now_ts:
+            note_pro_start(con, uid, row["pro_until"], now_ts, purchase=True)
         reason = row["ended_reason"]
         if cancelling and reason == "":
             reason = "cancelled"

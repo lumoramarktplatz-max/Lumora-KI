@@ -44,6 +44,16 @@ Dann http://localhost:8000 öffnen.
 
 Persönlichkeit anpassen: `SYSTEM_PROMPT` in `app.py`. Anbieter: `LUMORA_PROVIDER` (`gemini` oder `claude`), Modell ändern: `LUMORA_MODEL`.
 
+## Rangliste und Belohnung
+
+- **Rangliste (🏆 oben):** Alle angemeldeten Nutzer sehen, wer am längsten Pro hatte (Summe aller Pro-Zeiten, Pausen zählen
+  nicht), längste Dauer zuerst, mit Medaillen für Platz 1–3. Admins stehen nicht darin. Jeder Nutzer kann sich im Konto selbst
+  ausblenden. Der Admin schaltet die Rangliste im Admin-Bereich ein/aus und versteckt einzelne Nutzer mit 🏆.
+- **Belohnung:** Kauft jemand Pro, fallen Emojis, Buchstaben und Wörter über den Bildschirm. Im Admin-Bereich stellst du ein,
+  was fällt (mit Komma trennen, z. B. `👍, ❤️, Danke, A, B`, mehrere Dinge gleichzeitig), wie viele, wie lange und welche
+  Nachricht oben steht. **Vorschau** zeigt es sofort. Mit 🎁 in der Nutzerliste löst du sie für einen einzelnen Nutzer aus
+  (er sieht sie beim nächsten Öffnen von Lumora). Bei Nutzern mit „Bewegung reduzieren“ erscheint nur die Nachricht.
+
 ## Support (ein echter Mensch antwortet)
 
 Nutzer öffnen im Konto **Support kontaktieren** und schreiben dem Admin. Der Admin sieht neue Nachrichten im Admin-Bereich
